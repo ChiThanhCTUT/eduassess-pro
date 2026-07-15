@@ -1,0 +1,1187 @@
+import express from 'express';
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
+import path from 'path';
+import crypto from 'crypto';
+import { initialQuestions, initialActiveExams, initialExamHistory } from './src/data';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'eduassess_secret_session_key_2026';
+
+function hashPassword(password: string, email: string): string {
+  const systemSalt = 'EduAssessSystemSalt2026#';
+  return crypto.createHash('sha256').update(password + email.toLowerCase().trim() + systemSalt).digest('hex');
+}
+
+function generateToken(user: { email: string; role: string; name: string; studentId: string; class_id?: number | null }): string {
+  const payload = JSON.stringify({
+    email: user.email,
+    role: user.role,
+    name: user.name,
+    studentId: user.studentId,
+    class_id: user.class_id || null,
+    exp: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+  });
+  const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+  return Buffer.from(payload).toString('base64') + '.' + signature;
+}
+
+function verifyToken(token: string): any | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 2) return null;
+    const payload = Buffer.from(parts[0], 'base64').toString('utf8');
+    const signature = parts[1];
+    const expectedSignature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
+    if (signature !== expectedSignature) return null;
+    const parsed = JSON.parse(payload);
+    if (Date.now() > parsed.exp) return null; // Expired
+    return parsed;
+  } catch (e) {
+    return null;
+  }
+}
+
+function authenticateToken(req: any, res: any, next: any) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  if (!token) {
+    return res.status(401).json({ error: 'Chưa cung cấp token xác thực.' });
+  }
+  const user = verifyToken(token);
+  if (!user) {
+    return res.status(403).json({ error: 'Token không hợp lệ hoặc đã hết hạn.' });
+  }
+  req.user = user;
+  next();
+}
+
+function requireRole(allowedRoles: string[]) {
+  return (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Chưa xác thực.' });
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Bạn không có quyền thực hiện hành động này.' });
+    }
+    next();
+  };
+}
+
+function normalizeRole(dbRole: string): 'student' | 'teacher' | 'admin' {
+  if (!dbRole) return 'student';
+  const r = dbRole.toLowerCase().trim();
+  if (r === 'lecturer' || r === 'teacher') return 'teacher';
+  if (r === 'admin') return 'admin';
+  return 'student';
+}
+
+// Load environment variables from .env.local
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+
+const app = express();
+app.use(express.json());
+
+const dbConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  port: parseInt(process.env.DB_PORT || '3306'),
+  charset: 'utf8mb4'
+};
+
+const dbName = process.env.DB_NAME || 'eduassess_pro';
+
+async function initializeDatabase() {
+  let connection;
+  try {
+    // 1. Connect without database to create it if it doesn't exist
+    connection = await mysql.createConnection(dbConfig);
+    await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    await connection.query(`ALTER DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+    console.log(`Database '${dbName}' verified/created.`);
+  } catch (err) {
+    console.error('Error creating database:', err);
+    process.exit(1);
+  } finally {
+    if (connection) {
+      await connection.end();
+    }
+  }
+
+  // 2. Create connection pool using the database
+  const pool = mysql.createPool({
+    ...dbConfig,
+    database: dbName,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+  });
+
+  // 3. Create tables if they don't exist
+  try {
+    // Questions Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS questions (
+        id VARCHAR(50) PRIMARY KEY,
+        content TEXT NOT NULL,
+        subject VARCHAR(100),
+        difficulty VARCHAR(50),
+        options TEXT NOT NULL,
+        correctAnswer INT NOT NULL,
+        topic VARCHAR(100),
+        avgTime VARCHAR(50),
+        errorRate FLOAT
+      )
+    `);
+
+    // Active Exams Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS active_exams (
+        id VARCHAR(50) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        subject VARCHAR(100),
+        duration INT NOT NULL,
+        questionCount INT NOT NULL,
+        description TEXT,
+        iconName VARCHAR(100),
+        category VARCHAR(100)
+      )
+    `);
+
+    // Exam History Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS exam_history (
+        id VARCHAR(50) PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        department VARCHAR(100),
+        userEmail VARCHAR(150) NOT NULL,
+        submitDate VARCHAR(100),
+        score VARCHAR(50),
+        result VARCHAR(50),
+        iconName VARCHAR(100),
+        questionsDetail TEXT NOT NULL
+      )
+    `);
+
+    // Users Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        email VARCHAR(150) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        role VARCHAR(50) NOT NULL,
+        studentId VARCHAR(50),
+        department VARCHAR(100) DEFAULT 'Khoa CNTT',
+        status VARCHAR(50) DEFAULT 'Active',
+        createdAt VARCHAR(50)
+      )
+    `);
+
+    // Ensure columns exist on already created table
+    try {
+      await pool.query("ALTER TABLE users ADD COLUMN department VARCHAR(100) DEFAULT 'Khoa CNTT'");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE users ADD COLUMN status VARCHAR(50) DEFAULT 'Active'");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE users ADD COLUMN createdAt VARCHAR(50)");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE users ADD COLUMN class_id INT DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE active_exams ADD COLUMN class_id INT DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE active_exams ADD COLUMN questionIds TEXT DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE exam_history ADD COLUMN userEmail VARCHAR(150) NOT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("CREATE INDEX idx_users_role ON users (role)");
+    } catch (e) {}
+    try {
+      await pool.query("CREATE INDEX idx_questions_subject ON questions (subject)");
+    } catch (e) {}
+    try {
+      await pool.query("CREATE INDEX idx_exams_subject ON active_exams (subject)");
+    } catch (e) {}
+    try {
+      await pool.query("CREATE INDEX idx_history_user_email ON exam_history (userEmail)");
+    } catch (e) {}
+
+    // Departments Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS departments (
+        id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        head VARCHAR(255),
+        teacherCount INT DEFAULT 0
+      )
+    `);
+
+    // Subjects Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS subjects (
+        code VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        credits INT NOT NULL,
+        questionCount INT DEFAULT 0,
+        deptId VARCHAR(50),
+        FOREIGN KEY (deptId) REFERENCES departments(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Classes Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS classes (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        department_id VARCHAR(50) NOT NULL,
+        class_code VARCHAR(50) UNIQUE NOT NULL,
+        class_name VARCHAR(255) NOT NULL,
+        course_year VARCHAR(50),
+        status VARCHAR(50) DEFAULT 'Active',
+        created_at VARCHAR(50),
+        updated_at VARCHAR(50),
+        FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Drop system tables as module is removed
+    try {
+      await pool.query('DROP TABLE IF EXISTS system_settings, system_logs');
+    } catch (err) {}
+
+    console.log('Database tables verified/created.');
+
+    // Convert tables to support UTF-8 if they were created with a different charset
+    await pool.query('SET FOREIGN_KEY_CHECKS = 0');
+    const tablesToAlter = [
+      'questions',
+      'active_exams',
+      'exam_history',
+      'users',
+      'departments',
+      'subjects',
+      'classes'
+    ];
+    for (const table of tablesToAlter) {
+      try {
+        await pool.query(`ALTER TABLE \`${table}\` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+      } catch (err) {
+        console.warn(`Could not alter charset for table ${table}:`, err);
+      }
+    }
+    await pool.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    // 4. Seed initial data if tables are empty
+    // Seed questions
+    console.log('Verifying questions seeding...');
+    for (const q of initialQuestions) {
+      const [exists] = await pool.query('SELECT id FROM questions WHERE id = ?', [q.id]);
+      if ((exists as any[]).length === 0) {
+        await pool.query(
+          'INSERT INTO questions (id, content, subject, difficulty, options, correctAnswer, topic, avgTime, errorRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [q.id, q.content, q.subject, q.difficulty, JSON.stringify(q.options), q.correctAnswer, q.topic, q.avgTime, q.errorRate]
+        );
+      } else {
+        await pool.query(
+          'UPDATE questions SET content = ?, subject = ?, difficulty = ?, options = ?, correctAnswer = ?, topic = ?, avgTime = ?, errorRate = ? WHERE id = ?',
+          [q.content, q.subject, q.difficulty, JSON.stringify(q.options), q.correctAnswer, q.topic, q.avgTime, q.errorRate, q.id]
+        );
+      }
+    }
+
+    // Seed active exams
+    console.log('Verifying active exams seeding...');
+    for (const exam of initialActiveExams) {
+      const [exists] = await pool.query('SELECT id FROM active_exams WHERE id = ?', [exam.id]);
+      if ((exists as any[]).length === 0) {
+        await pool.query(
+          'INSERT INTO active_exams (id, title, subject, duration, questionCount, description, iconName, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [exam.id, exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category]
+        );
+      } else {
+        await pool.query(
+          'UPDATE active_exams SET title = ?, subject = ?, duration = ?, questionCount = ?, description = ?, iconName = ?, category = ? WHERE id = ?',
+          [exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category, exam.id]
+        );
+      }
+    }
+
+    // Seed exam history
+    console.log('Verifying exam history seeding...');
+    for (const h of initialExamHistory) {
+      const [exists] = await pool.query('SELECT id FROM exam_history WHERE id = ?', [h.id]);
+      if ((exists as any[]).length === 0) {
+        await pool.query(
+          'INSERT INTO exam_history (id, title, department, userEmail, submitDate, score, result, iconName, questionsDetail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [h.id, h.title, h.department, 'alex.johnson@university.edu.vn', h.submitDate, h.score, h.result, h.iconName, JSON.stringify(h.questionsDetail)]
+        );
+      } else {
+        await pool.query(
+          'UPDATE exam_history SET title = ?, department = ?, userEmail = ?, submitDate = ?, score = ?, result = ?, iconName = ?, questionsDetail = ? WHERE id = ?',
+          [h.title, h.department, 'alex.johnson@university.edu.vn', h.submitDate, h.score, h.result, h.iconName, JSON.stringify(h.questionsDetail), h.id]
+        );
+      }
+    }
+
+    // Seed default users
+    console.log('Verifying users seeding...');
+    const defaultUsers = [
+      {
+        email: 'alex.johnson@university.edu.vn',
+        plainPass: '12345678',
+        name: 'Alex Johnson',
+        role: 'student',
+        studentId: '48291',
+        department: 'Khoa CNTT',
+        status: 'Active',
+        createdAt: '12 Th08, 2023'
+      },
+      {
+        email: 'giangvien.nguyen@university.edu.vn',
+        plainPass: '12345678',
+        name: 'Giảng viên Nguyễn Văn A',
+        role: 'teacher',
+        studentId: '',
+        department: 'Khoa Toán học',
+        status: 'Active',
+        createdAt: '01 Th05, 2022'
+      },
+      {
+        email: 'tranvanb@university.edu.vn',
+        plainPass: '12345678',
+        name: 'PGS.TS. Trần Văn B',
+        role: 'teacher',
+        studentId: '',
+        department: 'Khoa CNTT',
+        status: 'Active',
+        createdAt: '15 Th02, 2020'
+      },
+      {
+        email: 'nguyenthic@university.edu.vn',
+        plainPass: '12345678',
+        name: 'ThS. Nguyễn Thị C',
+        role: 'teacher',
+        studentId: '',
+        department: 'Khoa Ngoại ngữ',
+        status: 'Active',
+        createdAt: '22 Th11, 2021'
+      },
+      {
+        email: 'leminhd@university.edu.vn',
+        plainPass: '12345678',
+        name: 'Lê Minh D',
+        role: 'student',
+        studentId: '99021',
+        department: 'Khoa Vật lý',
+        status: 'Suspended',
+        createdAt: '18 Th09, 2023'
+      },
+      {
+        email: 'admin.eduassess@university.edu.vn',
+        plainPass: '12345678',
+        name: 'Quản trị viên Hệ thống',
+        role: 'admin',
+        studentId: '',
+        department: 'Phòng Đào tạo',
+        status: 'Active',
+        createdAt: '01 Th01, 2020'
+      }
+    ];
+    for (const user of defaultUsers) {
+      const hashedPass = hashPassword(user.plainPass, user.email);
+      const [exists] = await pool.query('SELECT id FROM users WHERE email = ?', [user.email]);
+      if ((exists as any[]).length === 0) {
+        await pool.query(
+          'INSERT INTO users (email, password, name, role, studentId, department, status, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [user.email, hashedPass, user.name, user.role, user.studentId, user.department, user.status, user.createdAt]
+        );
+      } else {
+        await pool.query(
+          'UPDATE users SET name = ?, role = ?, studentId = ?, department = ?, status = ?, password = ? WHERE email = ?',
+          [user.name, user.role, user.studentId, user.department, user.status, hashedPass, user.email]
+        );
+      }
+    }
+
+    // Seed departments & subjects
+    console.log('Verifying departments & subjects seeding...');
+      const initialDepts = [
+        {
+          id: 'DEPT-01',
+          name: 'Khoa Công nghệ Thông tin',
+          head: 'PGS.TS. Trần Văn B',
+          teacherCount: 18,
+          subjects: [
+            { code: 'CS-201', name: 'Cấu trúc dữ liệu & Giải thuật', credits: 4, questionCount: 145 },
+            { code: 'CS-302', name: 'Cơ sở dữ liệu nâng cao', credits: 3, questionCount: 92 },
+            { code: 'CS-401', name: 'Trí tuệ nhân tạo & Học máy', credits: 4, questionCount: 110 }
+          ]
+        },
+        {
+          id: 'DEPT-02',
+          name: 'Khoa Toán học',
+          head: 'PGS.TS. Nguyễn Minh Triết',
+          teacherCount: 12,
+          subjects: [
+            { code: 'MATH-101', name: 'Giải tích I & II', credits: 4, questionCount: 180 },
+            { code: 'MATH-202', name: 'Đại số tuyến tính', credits: 3, questionCount: 125 },
+            { code: 'MATH-303', name: 'Xác suất thống kê ứng dụng', credits: 3, questionCount: 88 }
+          ]
+        },
+        {
+          id: 'DEPT-03',
+          name: 'Khoa Vật lý',
+          head: 'GS.TS. Cao Văn Sơn',
+          teacherCount: 9,
+          subjects: [
+            { code: 'PHYS-101', name: 'Vật lý đại cương', credits: 3, questionCount: 95 },
+            { code: 'PHYS-205', name: 'Vật lý lượng tử cơ bản', credits: 4, questionCount: 64 }
+          ]
+        },
+        {
+          id: 'DEPT-04',
+          name: 'Khoa Ngoại ngữ',
+          head: 'ThS. Nguyễn Thị C',
+          teacherCount: 15,
+          subjects: [
+            { code: 'ENG-101', name: 'Tiếng Anh chuyên ngành I', credits: 3, questionCount: 210 },
+            { code: 'ENG-202', name: 'Luyện thi IELTS Học thuật', credits: 4, questionCount: 155 }
+          ]
+        }
+      ];
+
+      for (const dept of initialDepts) {
+        const [deptExists] = await pool.query('SELECT id FROM departments WHERE id = ?', [dept.id]);
+        if ((deptExists as any[]).length === 0) {
+          await pool.query(
+            'INSERT INTO departments (id, name, head, teacherCount) VALUES (?, ?, ?, ?)',
+            [dept.id, dept.name, dept.head, dept.teacherCount]
+          );
+        } else {
+          await pool.query(
+            'UPDATE departments SET name = ?, head = ?, teacherCount = ? WHERE id = ?',
+            [dept.name, dept.head, dept.teacherCount, dept.id]
+          );
+        }
+        for (const sub of dept.subjects) {
+          const [subExists] = await pool.query('SELECT code FROM subjects WHERE code = ?', [sub.code]);
+          if ((subExists as any[]).length === 0) {
+            await pool.query(
+              'INSERT INTO subjects (code, name, credits, questionCount, deptId) VALUES (?, ?, ?, ?, ?)',
+              [sub.code, sub.name, sub.credits, sub.questionCount, dept.id]
+            );
+          } else {
+            await pool.query(
+              'UPDATE subjects SET name = ?, credits = ?, questionCount = ?, deptId = ? WHERE code = ?',
+              [sub.name, sub.credits, sub.questionCount, dept.id, sub.code]
+            );
+          }
+        }
+      }
+      console.log('Seeded departments and subjects successfully.');
+
+    // Seed initial classes
+    console.log('Verifying classes seeding...');
+    const initialClasses = [
+      { department_id: 'DEPT-01', class_code: 'CTK45A', class_name: 'Công nghệ thông tin K45 - Nhóm A', course_year: 'K45 (2021-2025)' },
+      { department_id: 'DEPT-01', class_code: 'CTK45B', class_name: 'Công nghệ thông tin K45 - Nhóm B', course_year: 'K45 (2021-2025)' },
+      { department_id: 'DEPT-02', class_code: 'TK45A', class_name: 'Toán học K45 - Nhóm A', course_year: 'K45 (2021-2025)' },
+      { department_id: 'DEPT-03', class_code: 'VLK45A', class_name: 'Vật lý K45 - Nhóm A', course_year: 'K45 (2021-2025)' },
+      { department_id: 'DEPT-04', class_code: 'NNK45A', class_name: 'Ngoại ngữ K45 - Nhóm A', course_year: 'K45 (2021-2025)' },
+    ];
+    for (const cls of initialClasses) {
+      const [exists] = await pool.query('SELECT id FROM classes WHERE class_code = ?', [cls.class_code]);
+      if ((exists as any[]).length === 0) {
+        const now = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
+        await pool.query(
+          'INSERT INTO classes (department_id, class_code, class_name, course_year, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [cls.department_id, cls.class_code, cls.class_name, cls.course_year, 'Active', now, now]
+        );
+      }
+    }
+    // Update default student Alex Johnson to belong to class CTK45A
+    try {
+      const [classRows] = await pool.query("SELECT id FROM classes WHERE class_code = 'CTK45A'");
+      if ((classRows as any[]).length > 0) {
+        const classId = (classRows as any[])[0].id;
+        await pool.query("UPDATE users SET class_id = ? WHERE email = 'alex.johnson@university.edu.vn'", [classId]);
+      }
+    } catch(e) {}
+    console.log('Seeded classes successfully.');
+
+    console.log('Database seeding verified.');
+  } catch (err) {
+    console.error('Error creating tables or seeding data:', err);
+  }
+
+  // --- API Endpoints ---
+
+  // GET all questions (with optional filters)
+  app.get('/api/questions', authenticateToken, async (req, res) => {
+    try {
+      const { search, subject, difficulty, topic } = req.query;
+      let query = 'SELECT * FROM questions WHERE 1=1';
+      const params: any[] = [];
+
+      if (search) {
+        query += ' AND (content LIKE ? OR topic LIKE ? OR id LIKE ?)';
+        const searchLike = `%${search}%`;
+        params.push(searchLike, searchLike, searchLike);
+      }
+      if (subject && subject !== 'all') {
+        query += ' AND subject = ?';
+        params.push(subject);
+      }
+      if (difficulty && difficulty !== 'all') {
+        query += ' AND difficulty = ?';
+        params.push(difficulty);
+      }
+      if (topic && topic !== 'all') {
+        query += ' AND topic = ?';
+        params.push(topic);
+      }
+
+      query += ' ORDER BY id DESC';
+
+      const [rows] = await pool.query(query, params);
+      const parsed = (rows as any[]).map(row => ({
+        ...row,
+        options: typeof row.options === 'string' ? JSON.parse(row.options) : row.options
+      }));
+      res.json(parsed);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Đã có lỗi xảy ra khi tải danh sách câu hỏi.' });
+    }
+  });
+
+  // POST new question
+  app.post('/api/questions', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const q = req.body;
+      await pool.query(
+        'INSERT INTO questions (id, content, subject, difficulty, options, correctAnswer, topic, avgTime, errorRate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [q.id, q.content, q.subject, q.difficulty, JSON.stringify(q.options), q.correctAnswer, q.topic, q.avgTime, q.errorRate || 0]
+      );
+      res.status(201).json(q);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể thêm câu hỏi mới vào hệ thống.' });
+    }
+  });
+
+  // PUT update question
+  app.put('/api/questions/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const q = req.body;
+      await pool.query(
+        'UPDATE questions SET content = ?, subject = ?, difficulty = ?, options = ?, correctAnswer = ?, topic = ?, avgTime = ?, errorRate = ? WHERE id = ?',
+        [q.content, q.subject, q.difficulty, JSON.stringify(q.options), q.correctAnswer, q.topic, q.avgTime, q.errorRate, id]
+      );
+      res.json(q);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể cập nhật câu hỏi.' });
+    }
+  });
+
+  // DELETE question
+  app.delete('/api/questions/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await pool.query('DELETE FROM questions WHERE id = ?', [id]);
+      res.json({ message: 'Question deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xóa câu hỏi.' });
+    }
+  });
+
+  // GET all active exams (with filters, class-based for students)
+  app.get('/api/exams', authenticateToken, async (req: any, res) => {
+    try {
+      const { search, subject, category } = req.query;
+      let query = 'SELECT e.*, c.class_name, c.class_code FROM active_exams e LEFT JOIN classes c ON e.class_id = c.id WHERE 1=1';
+      const params: any[] = [];
+
+      // Students only see exams assigned to their class or exams with no class
+      if (req.user.role === 'student' && req.user.class_id) {
+        query += ' AND (e.class_id = ? OR e.class_id IS NULL)';
+        params.push(req.user.class_id);
+      }
+
+      if (search) {
+        query += ' AND (e.title LIKE ? OR e.description LIKE ? OR e.id LIKE ?)';
+        const searchLike = `%${search}%`;
+        params.push(searchLike, searchLike, searchLike);
+      }
+      if (subject && subject !== 'all') {
+        query += ' AND e.subject = ?';
+        params.push(subject);
+      }
+      if (category && category !== 'all') {
+        query += ' AND e.category = ?';
+        params.push(category);
+      }
+
+      query += ' ORDER BY e.id DESC';
+
+      const [rows] = await pool.query(query, params);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Đã có lỗi xảy ra khi tải danh sách đề thi.' });
+    }
+  });
+
+  // POST new exam - validates question count and stores selected questionIds
+  app.post('/api/exams', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const exam = req.body;
+      const { subject, questionCount, class_id } = exam;
+
+      // Validate: count available questions for this subject
+      const [availableRows] = await pool.query(
+        'SELECT id FROM questions WHERE subject = ?',
+        [subject]
+      );
+      const available = (availableRows as any[]);
+
+      if (available.length < questionCount) {
+        return res.status(400).json({
+          error: `Ngân hàng câu hỏi môn "${subject}" chỉ có ${available.length} câu, không đủ ${questionCount} câu yêu cầu.`
+        });
+      }
+
+      // Randomly select questionCount questions from available pool
+      const shuffled = available.sort(() => Math.random() - 0.5);
+      const selected = shuffled.slice(0, questionCount);
+      const questionIds = JSON.stringify(selected.map((q: any) => q.id));
+
+      await pool.query(
+        'INSERT INTO active_exams (id, title, subject, duration, questionCount, description, iconName, category, class_id, questionIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [exam.id, exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category, class_id || null, questionIds]
+      );
+      res.status(201).json({ ...exam, questionIds, class_id: class_id || null });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xuất bản đề thi mới.' });
+    }
+  });
+
+  // PUT update exam
+  app.put('/api/exams/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const exam = req.body;
+      await pool.query(
+        'UPDATE active_exams SET title = ?, subject = ?, duration = ?, questionCount = ?, description = ?, iconName = ?, category = ?, class_id = ? WHERE id = ?',
+        [exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category, exam.class_id || null, id]
+      );
+      res.json(exam);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể cập nhật đề thi.' });
+    }
+  });
+
+  // DELETE exam
+  app.delete('/api/exams/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await pool.query('DELETE FROM active_exams WHERE id = ?', [id]);
+      res.json({ message: 'Exam deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xóa đề thi.' });
+    }
+  });
+
+  // GET all exam histories (Filtered dynamically: student gets own; teacher/admin gets all)
+  app.get('/api/history', authenticateToken, async (req: any, res) => {
+    try {
+      let rows;
+      if (req.user.role === 'student') {
+        const [studentRows] = await pool.query('SELECT * FROM exam_history WHERE userEmail = ? ORDER BY id DESC', [req.user.email]);
+        rows = studentRows;
+      } else {
+        const [allRows] = await pool.query('SELECT * FROM exam_history ORDER BY id DESC');
+        rows = allRows;
+      }
+      const parsed = (rows as any[]).map(row => ({
+        ...row,
+        questionsDetail: typeof row.questionsDetail === 'string' ? JSON.parse(row.questionsDetail) : row.questionsDetail
+      }));
+      res.json(parsed);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tải lịch sử kiểm tra.' });
+    }
+  });
+
+  // POST new exam history (Securely maps userEmail from the verified Token)
+  app.post('/api/history', authenticateToken, async (req: any, res) => {
+    try {
+      const h = req.body;
+      const userEmail = req.user.email;
+      await pool.query(
+        'INSERT INTO exam_history (id, title, department, userEmail, submitDate, score, result, iconName, questionsDetail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [h.id, h.title, h.department, userEmail, h.submitDate, h.score, h.result, h.iconName, JSON.stringify(h.questionsDetail)]
+      );
+      res.status(201).json({ ...h, userEmail });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể nộp kết quả thi.' });
+    }
+  });
+
+  // --- AUTHENTICATION ENDPOINTS ---
+
+
+  // POST login
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const { email, password } = req.body;
+      if (!email || !password) {
+        return res.status(400).json({ error: 'Vui lòng cung cấp email và mật khẩu.' });
+      }
+
+      const hashed = hashPassword(password, email);
+      const [users] = await pool.query(
+        'SELECT name, role, studentId, status, class_id FROM users WHERE email = ? AND password = ?',
+        [email, hashed]
+      );
+
+      if ((users as any[]).length === 0) {
+        return res.status(401).json({ error: 'Email hoặc mật khẩu không chính xác.' });
+      }
+
+      const user = (users as any[])[0];
+
+      // Check if account is suspended
+      if (user.status === 'Suspended') {
+        return res.status(403).json({ error: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.' });
+      }
+
+      const tokenUser = { email, role: user.role, name: user.name, studentId: user.studentId || '', class_id: user.class_id || null };
+      res.json({
+        message: 'Đăng nhập thành công.',
+        token: generateToken(tokenUser),
+        user: {
+          email,
+          name: user.name,
+          role: normalizeRole(user.role),
+          studentId: user.studentId,
+          class_id: user.class_id || null
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Lỗi đăng nhập hệ thống.' });
+    }
+  });
+
+  // --- USER CRUD ENDPOINTS ---
+
+  // GET all users
+  app.get('/api/users', authenticateToken, requireRole(['admin', 'teacher']), async (req, res) => {
+    try {
+      const { role, status, search, sortBy = 'id', sortOrder = 'DESC' } = req.query;
+      let query = 'SELECT u.id, u.email, u.name, u.role, u.studentId, u.department, u.status, u.createdAt, u.class_id, c.class_name, c.class_code FROM users u LEFT JOIN classes c ON u.class_id = c.id WHERE 1=1';
+      const params: any[] = [];
+
+      if (role && role !== 'all') {
+        query += ' AND role = ?';
+        params.push(role);
+      }
+      if (status && status !== 'all') {
+        query += ' AND status = ?';
+        params.push(status);
+      }
+      if (search) {
+        query += ' AND (name LIKE ? OR email LIKE ? OR CAST(id AS CHAR) LIKE ?)';
+        const searchLike = `%${search}%`;
+        params.push(searchLike, searchLike, searchLike);
+      }
+
+      const allowedCols = ['id', 'name', 'email', 'role', 'department', 'status', 'createdAt'];
+      const finalSortBy = allowedCols.includes(sortBy as string) ? sortBy : 'id';
+      const finalSortOrder = sortOrder === 'ASC' ? 'ASC' : 'DESC';
+      query += ` ORDER BY ${finalSortBy} ${finalSortOrder}`;
+
+      const [rows] = await pool.query(query, params);
+      const parsed = (rows as any[]).map(row => ({
+        ...row,
+        role: normalizeRole(row.role),
+        class_name: row.class_name || null,
+        class_code: row.class_code || null
+      }));
+      res.json(parsed);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tải thông tin tài khoản.' });
+    }
+  });
+
+  // POST create user
+  app.post('/api/users', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { email, password, name, role, department, status, class_id } = req.body;
+      if (!email || !password || !name || !role) {
+        return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+      }
+
+      const [exists] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
+      if ((exists as any[]).length > 0) {
+        return res.status(400).json({ error: 'Email này đã được sử dụng.' });
+      }
+
+      // Auto-generate studentId for students based on class_code
+      let studentId = '';
+      if (normalizeRole(role) === 'student' && class_id) {
+        const [classRows] = await pool.query('SELECT class_code FROM classes WHERE id = ?', [class_id]);
+        if ((classRows as any[]).length > 0) {
+          const classCode = (classRows as any[])[0].class_code;
+          // Count existing students in this class to generate next number
+          const [countRows] = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE class_id = ?', [class_id]);
+          const nextNum = ((countRows as any[])[0].cnt || 0) + 1;
+          studentId = `${classCode}-${String(nextNum).padStart(3, '0')}`;
+        }
+      }
+
+      const hashed = hashPassword(password, email);
+      const createdAt = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+      const [result] = await pool.query(
+        'INSERT INTO users (email, password, name, role, studentId, department, status, createdAt, class_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [email, hashed, name, role, studentId, department || 'Khoa CNTT', status || 'Active', createdAt, class_id || null]
+      );
+
+      const newId = (result as any).insertId;
+
+      // Get class info for response
+      let class_name = null;
+      let class_code = null;
+      if (class_id) {
+        const [cls] = await pool.query('SELECT class_name, class_code FROM classes WHERE id = ?', [class_id]);
+        if ((cls as any[]).length > 0) {
+          class_name = (cls as any[])[0].class_name;
+          class_code = (cls as any[])[0].class_code;
+        }
+      }
+
+      res.status(201).json({
+        id: newId,
+        email,
+        name,
+        role: normalizeRole(role),
+        studentId,
+        department: department || 'Khoa CNTT',
+        status: status || 'Active',
+        createdAt,
+        class_id: class_id || null,
+        class_name,
+        class_code
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tạo tài khoản mới.' });
+    }
+  });
+
+  // PUT update user
+  app.put('/api/users/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, email, role, studentId, department, status, password, class_id } = req.body;
+
+      if (!email || !name || !role) {
+        return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+      }
+
+      let query = 'UPDATE users SET name = ?, email = ?, role = ?, studentId = ?, department = ?, status = ?, class_id = ?';
+      const params = [name, email, role, studentId || '', department || 'Khoa CNTT', status || 'Active', class_id || null];
+
+      if (password) {
+        query += ', password = ?';
+        params.push(hashPassword(password, email));
+      }
+
+      query += ' WHERE id = ?';
+      params.push(id);
+
+      await pool.query(query, params);
+
+      res.json({
+        id,
+        name,
+        email,
+        role: normalizeRole(role),
+        studentId: studentId || '',
+        department: department || 'Khoa CNTT',
+        status: status || 'Active',
+        class_id: class_id || null
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể cập nhật tài khoản.' });
+    }
+  });
+
+  // DELETE user
+  app.delete('/api/users/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await pool.query('DELETE FROM users WHERE id = ?', [id]);
+      res.json({ message: 'User deleted successfully' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xóa tài khoản.' });
+    }
+  });
+
+  // PUT toggle suspend status
+  app.put('/api/users/:id/status', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!status) {
+        return res.status(400).json({ error: 'Thiếu trạng thái.' });
+      }
+      await pool.query('UPDATE users SET status = ? WHERE id = ?', [status, id]);
+      res.json({ id, status });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể thay đổi trạng thái tài khoản.' });
+    }
+  });
+
+  // --- DEPARTMENT & SUBJECT CRUD ENDPOINTS ---
+
+  // GET all departments (with their subjects joined and teacher counts computed dynamically)
+  app.get('/api/departments', authenticateToken, async (_req, res) => {
+    try {
+      const [depts] = await pool.query('SELECT * FROM departments');
+      const [subs] = await pool.query('SELECT * FROM subjects');
+      
+      // Calculate dynamic teacher count per department from users table
+      const [teacherCounts] = await pool.query(`
+        SELECT department, COUNT(*) as count 
+        FROM users 
+        WHERE role = 'teacher' 
+        GROUP BY department
+      `);
+      const teacherMap: Record<string, number> = {};
+      (teacherCounts as any[]).forEach(row => {
+        if (row.department) {
+          teacherMap[row.department.toLowerCase().trim()] = row.count;
+        }
+      });
+
+      // Calculate dynamic question count per subject from questions table
+      const [questionCounts] = await pool.query(`
+        SELECT subject, COUNT(*) as count 
+        FROM questions 
+        GROUP BY subject
+      `);
+      const questionMap: Record<string, number> = {};
+      (questionCounts as any[]).forEach(row => {
+        if (row.subject) {
+          questionMap[row.subject.toLowerCase().trim()] = row.count;
+        }
+      });
+
+      const mapped = (depts as any[]).map(d => {
+        const deptNameNormalized = d.name.toLowerCase().trim();
+        const deptSubjects = (subs as any[]).filter(s => s.deptId === d.id).map(s => {
+          const subNameNormalized = s.name.toLowerCase().trim();
+          return {
+            ...s,
+            questionCount: questionMap[subNameNormalized] || 0
+          };
+        });
+        return {
+          ...d,
+          teacherCount: teacherMap[deptNameNormalized] || 0,
+          subjects: deptSubjects
+        };
+      });
+
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tải danh sách khoa.' });
+    }
+  });
+
+  // GET all subjects
+  app.get('/api/subjects', authenticateToken, async (_req, res) => {
+    try {
+      const [rows] = await pool.query('SELECT * FROM subjects');
+      // Calculate dynamic question count per subject
+      const [questionCounts] = await pool.query(`
+        SELECT subject, COUNT(*) as count 
+        FROM questions 
+        GROUP BY subject
+      `);
+      const questionMap: Record<string, number> = {};
+      (questionCounts as any[]).forEach(row => {
+        if (row.subject) {
+          questionMap[row.subject.toLowerCase().trim()] = row.count;
+        }
+      });
+
+      const mapped = (rows as any[]).map(s => ({
+        ...s,
+        questionCount: questionMap[s.name.toLowerCase().trim()] || 0
+      }));
+      res.json(mapped);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tải danh sách bộ môn.' });
+    }
+  });
+
+  // POST create department
+  app.post('/api/departments', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id, name, head, teacherCount } = req.body;
+      if (!id || !name) {
+        return res.status(400).json({ error: 'Thiếu mã khoa hoặc tên khoa.' });
+      }
+
+      await pool.query(
+        'INSERT INTO departments (id, name, head, teacherCount) VALUES (?, ?, ?, ?)',
+        [id, name, head || 'Chưa phân công', teacherCount || 0]
+      );
+
+      res.status(201).json({ id, name, head: head || 'Chưa phân công', teacherCount: teacherCount || 0, subjects: [] });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tạo khoa mới.' });
+    }
+  });
+
+  // DELETE department
+  app.delete('/api/departments/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await pool.query('DELETE FROM departments WHERE id = ?', [id]);
+      res.json({ message: 'Deleted department successfully.' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xóa khoa.' });
+    }
+  });
+
+  // POST create subject
+  app.post('/api/subjects', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { code, name, credits, questionCount, deptId } = req.body;
+      if (!code || !name || !credits || !deptId) {
+        return res.status(400).json({ error: 'Thiếu thông tin môn học bắt buộc.' });
+      }
+
+      await pool.query(
+        'INSERT INTO subjects (code, name, credits, questionCount, deptId) VALUES (?, ?, ?, ?, ?)',
+        [code.toUpperCase(), name, credits, questionCount || 0, deptId]
+      );
+
+      res.status(201).json({ code: code.toUpperCase(), name, credits, questionCount: questionCount || 0, deptId });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tạo môn học mới.' });
+    }
+  });
+
+  // DELETE subject
+  app.delete('/api/subjects/:code', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { code } = req.params;
+      await pool.query('DELETE FROM subjects WHERE code = ?', [code]);
+      res.json({ message: 'Deleted subject successfully.' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xóa môn học.' });
+    }
+  });
+
+
+  // --- CLASS CRUD ENDPOINTS ---
+
+  // GET all classes (with student count and department name)
+  app.get('/api/classes', authenticateToken, async (_req, res) => {
+    try {
+      const [rows] = await pool.query(`
+        SELECT c.*, d.name as department_name,
+          (SELECT COUNT(*) FROM users u WHERE u.class_id = c.id) as student_count
+        FROM classes c
+        LEFT JOIN departments d ON c.department_id = d.id
+        ORDER BY c.id DESC
+      `);
+      res.json(rows);
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể tải danh sách lớp học.' });
+    }
+  });
+
+  // POST create class
+  app.post('/api/classes', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { department_id, class_code, class_name, course_year } = req.body;
+      if (!department_id || !class_code || !class_name) {
+        return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+      }
+
+      const now = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
+      const [result] = await pool.query(
+        'INSERT INTO classes (department_id, class_code, class_name, course_year, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [department_id, class_code, class_name, course_year || '', 'Active', now, now]
+      );
+
+      const newId = (result as any).insertId;
+      const [deptRows] = await pool.query('SELECT name FROM departments WHERE id = ?', [department_id]);
+      const deptName = (deptRows as any[]).length > 0 ? (deptRows as any[])[0].name : '';
+
+      res.status(201).json({
+        id: newId,
+        department_id,
+        class_code,
+        class_name,
+        course_year: course_year || '',
+        status: 'Active',
+        student_count: 0,
+        department_name: deptName,
+        created_at: now,
+        updated_at: now
+      });
+    } catch (err: any) {
+      if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(400).json({ error: 'Mã lớp đã tồn tại.' });
+      }
+      res.status(500).json({ error: 'Không thể tạo lớp học mới.' });
+    }
+  });
+
+  // PUT update class
+  app.put('/api/classes/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { department_id, class_code, class_name, course_year, status } = req.body;
+      const now = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
+      await pool.query(
+        'UPDATE classes SET department_id = ?, class_code = ?, class_name = ?, course_year = ?, status = ?, updated_at = ? WHERE id = ?',
+        [department_id, class_code, class_name, course_year || '', status || 'Active', now, id]
+      );
+      res.json({ id: Number(id), department_id, class_code, class_name, course_year, status: status || 'Active', updated_at: now });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể cập nhật lớp học.' });
+    }
+  });
+
+  // DELETE class
+  app.delete('/api/classes/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      // Set class_id to null for users in this class
+      await pool.query('UPDATE users SET class_id = NULL WHERE class_id = ?', [id]);
+      await pool.query('DELETE FROM classes WHERE id = ?', [id]);
+      res.json({ message: 'Deleted class successfully.' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xóa lớp học.' });
+    }
+  });
+
+  // Start the server
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(`Express server running on port http://localhost:${PORT}`);
+  });
+}
+
+initializeDatabase();

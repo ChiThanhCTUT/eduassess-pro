@@ -1,0 +1,6 @@
+{
+  "name": "EduAssess Pro",
+  "description": "Hệ thống quản lý ngân hàng câu hỏi, tạo đề thi tự động và tổ chức kiểm tra học thuật trực tuyến với giao diện hiện đại.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
