@@ -144,7 +144,10 @@ async function initializeDatabase() {
         questionCount INT NOT NULL,
         description TEXT,
         iconName VARCHAR(100),
-        category VARCHAR(100)
+        category VARCHAR(100),
+        class_id INT DEFAULT NULL,
+        questionIds TEXT DEFAULT NULL,
+        difficultyDistribution TEXT DEFAULT NULL
       )
     `);
 
@@ -196,6 +199,9 @@ async function initializeDatabase() {
     } catch (e) {}
     try {
       await pool.query("ALTER TABLE active_exams ADD COLUMN questionIds TEXT DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE active_exams ADD COLUMN difficultyDistribution TEXT DEFAULT NULL");
     } catch (e) {}
     try {
       await pool.query("ALTER TABLE exam_history ADD COLUMN userEmail VARCHAR(150) NOT NULL");
@@ -523,7 +529,7 @@ async function initializeDatabase() {
   // --- API Endpoints ---
 
   // GET all questions (with optional filters)
-  app.get('/api/questions', authenticateToken, async (req, res) => {
+  app.get('/api/questions', authenticateToken, async (req: any, res) => {
     try {
       const { search, subject, difficulty, topic } = req.query;
       let query = 'SELECT * FROM questions WHERE 1=1';
@@ -535,25 +541,31 @@ async function initializeDatabase() {
         params.push(searchLike, searchLike, searchLike);
       }
       if (subject && subject !== 'all') {
-        query += ' AND subject = ?';
+        query += ' AND LOWER(subject) = LOWER(?)';
         params.push(subject);
       }
       if (difficulty && difficulty !== 'all') {
-        query += ' AND difficulty = ?';
+        query += ' AND LOWER(difficulty) = LOWER(?)';
         params.push(difficulty);
       }
       if (topic && topic !== 'all') {
-        query += ' AND topic = ?';
+        query += ' AND LOWER(topic) = LOWER(?)';
         params.push(topic);
       }
 
       query += ' ORDER BY id DESC';
 
       const [rows] = await pool.query(query, params);
-      const parsed = (rows as any[]).map(row => ({
-        ...row,
-        options: typeof row.options === 'string' ? JSON.parse(row.options) : row.options
-      }));
+      const parsed = (rows as any[]).map(row => {
+        const item: any = {
+          ...row,
+          options: typeof row.options === 'string' ? JSON.parse(row.options) : row.options
+        };
+        if (req.user && req.user.role === 'student') {
+          delete item.correctAnswer;
+        }
+        return item;
+      });
       res.json(parsed);
     } catch (err: any) {
       res.status(500).json({ error: 'Đã có lỗi xảy ra khi tải danh sách câu hỏi.' });
@@ -630,21 +642,25 @@ async function initializeDatabase() {
       query += ' ORDER BY e.id DESC';
 
       const [rows] = await pool.query(query, params);
-      res.json(rows);
+      const parsed = (rows as any[]).map(row => ({
+        ...row,
+        difficultyDistribution: typeof row.difficultyDistribution === 'string' ? JSON.parse(row.difficultyDistribution) : row.difficultyDistribution
+      }));
+      res.json(parsed);
     } catch (err: any) {
       res.status(500).json({ error: 'Đã có lỗi xảy ra khi tải danh sách đề thi.' });
     }
   });
 
-  // POST new exam - validates question count and stores selected questionIds
+  // POST new exam - validates question count and stores selected questionIds according to difficulty distribution
   app.post('/api/exams', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
     try {
       const exam = req.body;
-      const { subject, questionCount, class_id } = exam;
+      const { subject, questionCount, class_id, difficultyDistribution } = exam;
 
       // Validate: count available questions for this subject
       const [availableRows] = await pool.query(
-        'SELECT id FROM questions WHERE subject = ?',
+        'SELECT id, difficulty FROM questions WHERE subject = ?',
         [subject]
       );
       const available = (availableRows as any[]);
@@ -655,16 +671,47 @@ async function initializeDatabase() {
         });
       }
 
-      // Randomly select questionCount questions from available pool
-      const shuffled = available.sort(() => Math.random() - 0.5);
-      const selected = shuffled.slice(0, questionCount);
+      let selected: any[] = [];
+      if (difficultyDistribution && (difficultyDistribution.easy || difficultyDistribution.medium || difficultyDistribution.hard)) {
+        const easyPool = available.filter(q => (q.difficulty || '').toLowerCase() === 'dễ' || (q.difficulty || '').toLowerCase() === 'easy');
+        const mediumPool = available.filter(q => (q.difficulty || '').toLowerCase() === 'trung bình' || (q.difficulty || '').toLowerCase() === 'medium');
+        const hardPool = available.filter(q => (q.difficulty || '').toLowerCase() === 'khó' || (q.difficulty || '').toLowerCase() === 'hard');
+
+        const easyTarget = Math.round((questionCount * (difficultyDistribution.easy || 0)) / 100);
+        const mediumTarget = Math.round((questionCount * (difficultyDistribution.medium || 0)) / 100);
+        let hardTarget = questionCount - easyTarget - mediumTarget;
+        if (hardTarget < 0) hardTarget = 0;
+
+        const pickRandom = (pool: any[], count: number) => {
+          const shuffled = [...pool].sort(() => Math.random() - 0.5);
+          return shuffled.slice(0, count);
+        };
+
+        const pickedEasy = pickRandom(easyPool, easyTarget);
+        const pickedMedium = pickRandom(mediumPool, mediumTarget);
+        const pickedHard = pickRandom(hardPool, hardTarget);
+
+        const pickedSet = new Set([...pickedEasy, ...pickedMedium, ...pickedHard].map(q => q.id));
+        selected = [...pickedEasy, ...pickedMedium, ...pickedHard];
+
+        // If not enough due to rounding or limited questions per difficulty, backfill randomly from remaining subject pool
+        if (selected.length < questionCount) {
+          const remaining = available.filter(q => !pickedSet.has(q.id)).sort(() => Math.random() - 0.5);
+          selected = [...selected, ...remaining.slice(0, questionCount - selected.length)];
+        }
+      } else {
+        const shuffled = available.sort(() => Math.random() - 0.5);
+        selected = shuffled.slice(0, questionCount);
+      }
+
       const questionIds = JSON.stringify(selected.map((q: any) => q.id));
+      const distJson = JSON.stringify(difficultyDistribution || null);
 
       await pool.query(
-        'INSERT INTO active_exams (id, title, subject, duration, questionCount, description, iconName, category, class_id, questionIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [exam.id, exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category, class_id || null, questionIds]
+        'INSERT INTO active_exams (id, title, subject, duration, questionCount, description, iconName, category, class_id, questionIds, difficultyDistribution) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [exam.id, exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category, class_id || null, questionIds, distJson]
       );
-      res.status(201).json({ ...exam, questionIds, class_id: class_id || null });
+      res.status(201).json({ ...exam, questionIds, class_id: class_id || null, difficultyDistribution });
     } catch (err: any) {
       res.status(500).json({ error: 'Không thể xuất bản đề thi mới.' });
     }
@@ -675,9 +722,10 @@ async function initializeDatabase() {
     try {
       const { id } = req.params;
       const exam = req.body;
+      const distJson = JSON.stringify(exam.difficultyDistribution || null);
       await pool.query(
-        'UPDATE active_exams SET title = ?, subject = ?, duration = ?, questionCount = ?, description = ?, iconName = ?, category = ?, class_id = ? WHERE id = ?',
-        [exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category, exam.class_id || null, id]
+        'UPDATE active_exams SET title = ?, subject = ?, duration = ?, questionCount = ?, description = ?, iconName = ?, category = ?, class_id = ?, difficultyDistribution = ? WHERE id = ?',
+        [exam.title, exam.subject, exam.duration, exam.questionCount, exam.description, exam.iconName, exam.category, exam.class_id || null, distJson, id]
       );
       res.json(exam);
     } catch (err: any) {
@@ -701,10 +749,10 @@ async function initializeDatabase() {
     try {
       let rows;
       if (req.user.role === 'student') {
-        const [studentRows] = await pool.query('SELECT * FROM exam_history WHERE userEmail = ? ORDER BY id DESC', [req.user.email]);
+        const [studentRows] = await pool.query('SELECT h.*, u.name as userName FROM exam_history h LEFT JOIN users u ON h.userEmail = u.email WHERE h.userEmail = ? ORDER BY h.id DESC', [req.user.email]);
         rows = studentRows;
       } else {
-        const [allRows] = await pool.query('SELECT * FROM exam_history ORDER BY id DESC');
+        const [allRows] = await pool.query('SELECT h.*, u.name as userName FROM exam_history h LEFT JOIN users u ON h.userEmail = u.email ORDER BY h.id DESC');
         rows = allRows;
       }
       const parsed = (rows as any[]).map(row => ({
@@ -722,13 +770,122 @@ async function initializeDatabase() {
     try {
       const h = req.body;
       const userEmail = req.user.email;
+
+      let correctCount = 0;
+      let verifiedDetails = h.questionsDetail;
+      let finalScoreStr = h.score;
+      let finalResultStr = h.result;
+
+      if (Array.isArray(h.questionsDetail) && h.questionsDetail.length > 0) {
+        const [dbQuestions] = await pool.query('SELECT id, content, options, correctAnswer FROM questions');
+        const qMapById = new Map((dbQuestions as any[]).map(q => [q.id, q]));
+        const qMapByContent = new Map((dbQuestions as any[]).map(q => [q.content, q]));
+
+        verifiedDetails = h.questionsDetail.map((item: any) => {
+          const qObj = (item.questionId && qMapById.get(item.questionId)) || qMapByContent.get(item.questionText);
+          if (qObj) {
+            const opts = typeof qObj.options === 'string' ? JSON.parse(qObj.options) : (qObj.options || []);
+            const correctIdx = Number(qObj.correctAnswer);
+            const userOptIdx = item.selectedOptionIndex !== undefined ? Number(item.selectedOptionIndex) : undefined;
+            const isCorrect = userOptIdx !== undefined && userOptIdx === correctIdx;
+            if (isCorrect) correctCount++;
+
+            return {
+              ...item,
+              userAnswer: userOptIdx !== undefined && opts[userOptIdx] ? opts[userOptIdx] : item.userAnswer,
+              correctAnswer: opts[correctIdx] || item.correctAnswer,
+              isCorrect
+            };
+          }
+          if (item.isCorrect) correctCount++;
+          return item;
+        });
+
+        const finalScoreNum = (correctCount / verifiedDetails.length) * 10;
+        finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
+        const pass = finalScoreNum >= 5;
+        finalResultStr = pass ? 'Đạt' : 'Không đạt';
+      }
+
       await pool.query(
         'INSERT INTO exam_history (id, title, department, userEmail, submitDate, score, result, iconName, questionsDetail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [h.id, h.title, h.department, userEmail, h.submitDate, h.score, h.result, h.iconName, JSON.stringify(h.questionsDetail)]
+        [h.id, h.title, h.department, userEmail, h.submitDate, finalScoreStr, finalResultStr, h.iconName, JSON.stringify(verifiedDetails)]
       );
-      res.status(201).json({ ...h, userEmail });
+      res.status(201).json({ ...h, score: finalScoreStr, result: finalResultStr, questionsDetail: verifiedDetails, userEmail });
     } catch (err: any) {
       res.status(500).json({ error: 'Không thể nộp kết quả thi.' });
+    }
+  });
+
+  // DELETE exam history
+  app.delete('/api/history/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await pool.query('DELETE FROM exam_history WHERE id = ?', [id]);
+      res.json({ message: 'Đã xóa lịch sử bài thi.' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể xóa lịch sử bài thi.' });
+    }
+  });
+
+  // POST re-grade exam history against current question bank answers
+  app.post('/api/history/:id/regrade', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const [historyRows] = await pool.query('SELECT h.*, u.name as userName FROM exam_history h LEFT JOIN users u ON h.userEmail = u.email WHERE h.id = ?', [id]);
+      if ((historyRows as any[]).length === 0) {
+        return res.status(404).json({ error: 'Không tìm thấy bài thi cần chấm lại.' });
+      }
+      const item = (historyRows as any[])[0];
+      const details = typeof item.questionsDetail === 'string' ? JSON.parse(item.questionsDetail) : (item.questionsDetail || []);
+
+      if (!Array.isArray(details) || details.length === 0) {
+        return res.status(400).json({ error: 'Bài thi không có chi tiết câu trả lời để chấm lại.' });
+      }
+
+      const [dbQuestions] = await pool.query('SELECT id, content, options, correctAnswer FROM questions');
+      const qMapById = new Map((dbQuestions as any[]).map(q => [q.id, q]));
+      const qMapByContent = new Map((dbQuestions as any[]).map(q => [q.content, q]));
+
+      let correctCount = 0;
+      const regradedDetails = details.map((d: any) => {
+        const qObj = (d.questionId && qMapById.get(d.questionId)) || qMapByContent.get(d.questionText);
+        if (qObj) {
+          const opts = typeof qObj.options === 'string' ? JSON.parse(qObj.options) : (qObj.options || []);
+          const correctIdx = Number(qObj.correctAnswer);
+          const userOptIdx = d.selectedOptionIndex !== undefined ? Number(d.selectedOptionIndex) : undefined;
+          const isCorrect = userOptIdx !== undefined && userOptIdx === correctIdx;
+          if (isCorrect) correctCount++;
+
+          return {
+            ...d,
+            userAnswer: userOptIdx !== undefined && opts[userOptIdx] ? opts[userOptIdx] : d.userAnswer,
+            correctAnswer: opts[correctIdx] || d.correctAnswer,
+            isCorrect
+          };
+        }
+        if (d.isCorrect) correctCount++;
+        return d;
+      });
+
+      const finalScoreNum = (correctCount / regradedDetails.length) * 10;
+      const finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
+      const pass = finalScoreNum >= 5;
+      const finalResultStr = pass ? 'Đạt' : 'Không đạt';
+
+      await pool.query(
+        'UPDATE exam_history SET score = ?, result = ?, questionsDetail = ? WHERE id = ?',
+        [finalScoreStr, finalResultStr, JSON.stringify(regradedDetails), id]
+      );
+
+      res.json({
+        ...item,
+        score: finalScoreStr,
+        result: finalResultStr,
+        questionsDetail: regradedDetails
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Lỗi chấm lại bài thi.' });
     }
   });
 
@@ -777,6 +934,42 @@ async function initializeDatabase() {
     }
   });
 
+  // POST mock OAuth login (for Google / Microsoft buttons)
+  app.post('/api/auth/mock-oauth', async (req, res) => {
+    try {
+      const { provider } = req.body;
+      const email = 'alex.johnson@university.edu.vn';
+      const [users] = await pool.query(
+        'SELECT name, role, studentId, status, class_id FROM users WHERE email = ?',
+        [email]
+      );
+
+      if ((users as any[]).length === 0) {
+        return res.status(404).json({ error: 'Tài khoản mặc định cho OAuth không tồn tại.' });
+      }
+
+      const user = (users as any[])[0];
+      if (user.status === 'Suspended') {
+        return res.status(403).json({ error: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.' });
+      }
+
+      const tokenUser = { email, role: user.role, name: user.name, studentId: user.studentId || '', class_id: user.class_id || null };
+      res.json({
+        message: `Đăng nhập qua ${provider || 'OAuth'} thành công.`,
+        token: generateToken(tokenUser),
+        user: {
+          email,
+          name: user.name,
+          role: normalizeRole(user.role),
+          studentId: user.studentId,
+          class_id: user.class_id || null
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Lỗi đăng nhập OAuth.' });
+    }
+  });
+
   // --- USER CRUD ENDPOINTS ---
 
   // GET all users
@@ -822,8 +1015,12 @@ async function initializeDatabase() {
   app.post('/api/users', authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       const { email, password, name, role, department, status, class_id } = req.body;
-      if (!email || !password || !name || !role) {
-        return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
+      if (!email || !name || !role) {
+        return res.status(400).json({ error: 'Thiếu thông tin bắt buộc (Email, Họ tên, Vai trò).' });
+      }
+
+      if (password && password.length < 8) {
+        return res.status(400).json({ error: 'Mật khẩu phải có ít nhất 8 ký tự để đảm bảo an toàn.' });
       }
 
       const [exists] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
@@ -844,7 +1041,8 @@ async function initializeDatabase() {
         }
       }
 
-      const hashed = hashPassword(password, email);
+      const finalPassword = password || `Edu@${crypto.randomBytes(4).toString('hex')}!`;
+      const hashed = hashPassword(finalPassword, email);
       const createdAt = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
 
       const [result] = await pool.query(
@@ -876,7 +1074,8 @@ async function initializeDatabase() {
         createdAt,
         class_id: class_id || null,
         class_name,
-        class_code
+        class_code,
+        initialPassword: password ? undefined : finalPassword
       });
     } catch (err: any) {
       res.status(500).json({ error: 'Không thể tạo tài khoản mới.' });
@@ -893,6 +1092,10 @@ async function initializeDatabase() {
         return res.status(400).json({ error: 'Thiếu thông tin bắt buộc.' });
       }
 
+      if (password && password.length < 8) {
+        return res.status(400).json({ error: 'Mật khẩu cập nhật phải có ít nhất 8 ký tự.' });
+      }
+
       let query = 'UPDATE users SET name = ?, email = ?, role = ?, studentId = ?, department = ?, status = ?, class_id = ?';
       const params = [name, email, role, studentId || '', department || 'Khoa CNTT', status || 'Active', class_id || null];
 
@@ -906,6 +1109,16 @@ async function initializeDatabase() {
 
       await pool.query(query, params);
 
+      let class_name = null;
+      let class_code = null;
+      if (class_id) {
+        const [cls] = await pool.query('SELECT class_name, class_code FROM classes WHERE id = ?', [class_id]);
+        if ((cls as any[]).length > 0) {
+          class_name = (cls as any[])[0].class_name;
+          class_code = (cls as any[])[0].class_code;
+        }
+      }
+
       res.json({
         id,
         name,
@@ -914,7 +1127,9 @@ async function initializeDatabase() {
         studentId: studentId || '',
         department: department || 'Khoa CNTT',
         status: status || 'Active',
-        class_id: class_id || null
+        class_id: class_id || null,
+        class_name,
+        class_code
       });
     } catch (err: any) {
       res.status(500).json({ error: 'Không thể cập nhật tài khoản.' });
@@ -1091,6 +1306,36 @@ async function initializeDatabase() {
     }
   });
 
+  // PUT update department
+  app.put('/api/departments/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { name, head, teacherCount } = req.body;
+      await pool.query(
+        'UPDATE departments SET name = ?, head = ?, teacherCount = ? WHERE id = ?',
+        [name, head || 'Chưa phân công', teacherCount || 0, id]
+      );
+      res.json({ id, name, head: head || 'Chưa phân công', teacherCount: teacherCount || 0 });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể cập nhật khoa.' });
+    }
+  });
+
+  // PUT update subject
+  app.put('/api/subjects/:code', authenticateToken, requireRole(['admin']), async (req, res) => {
+    try {
+      const { code } = req.params;
+      const { name, credits, questionCount, deptId } = req.body;
+      await pool.query(
+        'UPDATE subjects SET name = ?, credits = ?, questionCount = ?, deptId = ? WHERE code = ?',
+        [name, credits, questionCount || 0, deptId, code]
+      );
+      res.json({ code, name, credits, questionCount: questionCount || 0, deptId });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Không thể cập nhật bộ môn.' });
+    }
+  });
+
 
   // --- CLASS CRUD ENDPOINTS ---
 
@@ -1158,7 +1403,13 @@ async function initializeDatabase() {
         'UPDATE classes SET department_id = ?, class_code = ?, class_name = ?, course_year = ?, status = ?, updated_at = ? WHERE id = ?',
         [department_id, class_code, class_name, course_year || '', status || 'Active', now, id]
       );
-      res.json({ id: Number(id), department_id, class_code, class_name, course_year, status: status || 'Active', updated_at: now });
+
+      const [deptRows] = await pool.query('SELECT name FROM departments WHERE id = ?', [department_id]);
+      const deptName = (deptRows as any[]).length > 0 ? (deptRows as any[])[0].name : '';
+      const [countRows] = await pool.query('SELECT COUNT(*) as cnt FROM users WHERE class_id = ?', [id]);
+      const studentCount = (countRows as any[])[0]?.cnt || 0;
+
+      res.json({ id: Number(id), department_id, class_code, class_name, course_year, status: status || 'Active', updated_at: now, department_name: deptName, student_count: studentCount });
     } catch (err: any) {
       res.status(500).json({ error: 'Không thể cập nhật lớp học.' });
     }

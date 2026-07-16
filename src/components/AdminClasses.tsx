@@ -13,9 +13,8 @@ export default function AdminClasses() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
 
   // Form states
   const [formData, setFormData] = useState({
@@ -75,6 +74,18 @@ export default function AdminClasses() {
       class_name: '',
       course_year: new Date().getFullYear().toString()
     });
+    setEditingClass(null);
+    setShowAddModal(true);
+  };
+
+  const openEditModal = (cls: ClassItem) => {
+    setFormData({
+      department_id: cls.department_id || '',
+      class_code: cls.class_code || '',
+      class_name: cls.class_name || '',
+      course_year: cls.course_year || ''
+    });
+    setEditingClass(cls);
     setShowAddModal(true);
   };
 
@@ -82,6 +93,29 @@ export default function AdminClasses() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (editingClass) {
+      authFetch(`/api/classes/${editingClass.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Không thể cập nhật lớp học.');
+          return res.json();
+        })
+        .then(data => {
+          setClasses(prev => prev.map(c => c.id === editingClass.id ? { ...c, ...data } : c));
+          setShowAddModal(false);
+          setEditingClass(null);
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err.message);
+          setLoading(false);
+        });
+      return;
+    }
 
     authFetch('/api/classes', {
       method: 'POST',
@@ -246,14 +280,23 @@ export default function AdminClasses() {
                       </div>
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => handleDelete(cls.id)}
-                        className="p-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                        title="Xóa lớp học"
-                        id={`btn-delete-class-${cls.id}`}
-                      >
-                        <span className="material-symbols-outlined text-sm">delete</span>
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => openEditModal(cls)}
+                          className="p-1.5 border border-blue-200 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                          title="Chỉnh sửa lớp học"
+                        >
+                          <span className="material-symbols-outlined text-sm">edit</span>
+                        </button>
+                        <button
+                          onClick={() => handleDelete(cls.id)}
+                          className="p-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          title="Xóa lớp học"
+                          id={`btn-delete-class-${cls.id}`}
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -276,11 +319,11 @@ export default function AdminClasses() {
           <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[#0058be] text-2xl">add</span>
-                <h2 className="text-lg font-bold text-[#191c1d]">Thêm lớp học mới</h2>
+                <span className="material-symbols-outlined text-[#0058be] text-2xl">{editingClass ? 'edit' : 'add'}</span>
+                <h2 className="text-lg font-bold text-[#191c1d]">{editingClass ? 'Cập nhật thông tin Lớp học' : 'Thêm lớp học mới'}</h2>
               </div>
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => { setShowAddModal(false); setEditingClass(null); }}
                 className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors"
                 id="btn-close-class-modal"
               >
@@ -349,7 +392,7 @@ export default function AdminClasses() {
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={() => { setShowAddModal(false); setEditingClass(null); }}
                   className="px-4 py-2 border border-[#c2c6d6] text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   Hủy bỏ
@@ -359,7 +402,7 @@ export default function AdminClasses() {
                   className="px-5 py-2 bg-[#0058be] text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors"
                   id="btn-save-class"
                 >
-                  Thêm lớp học
+                  {editingClass ? 'Lưu thay đổi' : 'Thêm lớp học'}
                 </button>
               </div>
             </form>

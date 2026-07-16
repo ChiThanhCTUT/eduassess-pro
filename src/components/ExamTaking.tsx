@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ActiveExam, Question, ExamHistory } from '../types';
 
 interface ExamTakingProps {
@@ -28,8 +28,13 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, number>>({}); // questionIndex -> optionIndex selected
+  const answersRef = useRef<Record<number, number>>(answers);
+  useEffect(() => {
+    answersRef.current = answers;
+  }, [answers]);
+
   const [flagged, setFlagged] = useState<Record<number, boolean>>({}); // questionIndex -> boolean flag
-  const [timeLeft, setTimeLeft] = useState(exam.duration * 60 - 15); // in seconds
+  const [timeLeft, setTimeLeft] = useState(exam.duration * 60); // in seconds
   const [showToast, setShowToast] = useState(false);
 
   // Active countdown timer
@@ -38,7 +43,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(interval);
-          handleSubmit();
+          handleSubmit(true);
           return 0;
         }
         return prev - 1;
@@ -66,47 +71,56 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
     setFlagged(prev => ({ ...prev, [currentIndex]: !prev[currentIndex] }));
   };
 
-  const handleSubmit = () => {
-    if (window.confirm('Bạn có chắc chắn muốn nộp bài? Kết quả của bạn sẽ được chấm điểm ngay lập tức.')) {
-      // Calculate grade
-      let correctCount = 0;
-      const detailsList = examQuestions.map((q, idx) => {
-        const userOptIdx = answers[idx];
-        const isCorrect = userOptIdx !== undefined && userOptIdx === q.correctAnswer;
-        if (isCorrect) correctCount++;
-
-        return {
-          questionNum: idx + 1,
-          questionText: q.content,
-          userAnswer: userOptIdx !== undefined && q.options ? q.options[userOptIdx] : 'Không trả lời',
-          correctAnswer: q.options && q.correctAnswer !== undefined ? q.options[q.correctAnswer] : 'Chưa cập nhật',
-          isCorrect
-        };
-      });
-
-      const finalScoreNum = (correctCount / examQuestions.length) * 10;
-      const finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
-      const pass = finalScoreNum >= 5;
-
-      const dateStr = new Date().toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
-      });
-
-      const newHistoryItem: ExamHistory = {
-        id: `HIST-${Math.floor(Math.random() * 90000) + 10000}`,
-        title: exam.title,
-        department: `Khoa ${exam.subject}`,
-        submitDate: dateStr,
-        score: finalScoreStr,
-        result: pass ? 'Đạt' : 'Không đạt',
-        iconName: exam.iconName,
-        questionsDetail: detailsList
-      };
-
-      onFinishExam(newHistoryItem);
+  const handleSubmit = (isAutoSubmitParam?: boolean | React.MouseEvent) => {
+    const isAutoSubmit = isAutoSubmitParam === true;
+    if (!isAutoSubmit && !window.confirm('Bạn có chắc chắn muốn nộp bài? Kết quả của bạn sẽ được chấm điểm ngay lập tức.')) {
+      return;
     }
+    if (isAutoSubmit) {
+      alert('Đã hết thời gian làm bài! Hệ thống tự động thu bài và chấm điểm.');
+    }
+
+    const currentAnswers = answersRef.current;
+    // Calculate grade
+    let correctCount = 0;
+    const detailsList = examQuestions.map((q, idx) => {
+      const userOptIdx = currentAnswers[idx];
+      const isCorrect = userOptIdx !== undefined && q.correctAnswer !== undefined && userOptIdx === q.correctAnswer;
+      if (isCorrect) correctCount++;
+
+      return {
+        questionId: q.id,
+        selectedOptionIndex: userOptIdx,
+        questionNum: idx + 1,
+        questionText: q.content,
+        userAnswer: userOptIdx !== undefined && q.options ? q.options[userOptIdx] : 'Không trả lời',
+        correctAnswer: q.options && q.correctAnswer !== undefined ? q.options[q.correctAnswer] : 'Chưa cập nhật',
+        isCorrect
+      };
+    });
+
+    const finalScoreNum = (correctCount / examQuestions.length) * 10;
+    const finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
+    const pass = finalScoreNum >= 5;
+
+    const dateStr = new Date().toLocaleDateString('vi-VN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+
+    const newHistoryItem: ExamHistory = {
+      id: `HIST-${Math.floor(Math.random() * 90000) + 10000}`,
+      title: exam.title,
+      department: `Khoa ${exam.subject}`,
+      submitDate: dateStr,
+      score: finalScoreStr,
+      result: pass ? 'Đạt' : 'Không đạt',
+      iconName: exam.iconName,
+      questionsDetail: detailsList
+    };
+
+    onFinishExam(newHistoryItem);
   };
 
   return (

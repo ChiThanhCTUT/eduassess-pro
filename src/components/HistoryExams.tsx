@@ -4,9 +4,11 @@ import { ExamHistory } from '../types';
 interface HistoryExamsProps {
   history: ExamHistory[];
   role: 'student' | 'teacher' | 'admin';
+  onDeleteHistory?: (id: string) => void;
+  onRegradeHistory?: (id: string) => Promise<ExamHistory | void> | void;
 }
 
-export default function HistoryExams({ history, role }: HistoryExamsProps) {
+export default function HistoryExams({ history, role, onDeleteHistory, onRegradeHistory }: HistoryExamsProps) {
   const [selectedExam, setSelectedExam] = useState<ExamHistory | null>(null);
 
   return (
@@ -39,15 +41,20 @@ export default function HistoryExams({ history, role }: HistoryExamsProps) {
               <div>
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{item.department}</span>
                 <h3 className="text-base font-bold text-[#191c1d] mt-0.5">{item.title}</h3>
-                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1.5">
+                <p className="text-xs text-gray-500 mt-1 flex flex-wrap items-center gap-1.5">
                   <span className="material-symbols-outlined text-[14px]">calendar_month</span>
                   Đã nộp vào {item.submitDate}
+                  {role !== 'student' && item.userEmail && (
+                    <span className="ml-1 px-2 py-0.5 bg-blue-50 text-blue-700 font-semibold rounded-md text-[11px]">
+                      Thí sinh: {item.userName || item.userEmail}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-6 border-t sm:border-t-0 pt-4 sm:pt-0">
-              <div className="text-left sm:text-right">
+            <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 border-t sm:border-t-0 pt-4 sm:pt-0">
+              <div className="text-left sm:text-right mr-2">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Kết quả / Điểm</p>
                 <div className="flex items-center gap-2 mt-1">
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide ${
@@ -59,12 +66,42 @@ export default function HistoryExams({ history, role }: HistoryExamsProps) {
                 </div>
               </div>
 
-              <button 
-                onClick={() => setSelectedExam(item)}
-                className="px-4 py-2 border border-[#c2c6d6] text-[#0058be] font-bold text-xs rounded-lg hover:bg-blue-50 transition-colors"
-              >
-                Xem chi tiết bài thi
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setSelectedExam(item)}
+                  className="px-3 py-2 border border-[#c2c6d6] text-[#0058be] font-bold text-xs rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  Chi tiết
+                </button>
+                {(role === 'teacher' || role === 'admin') && (
+                  <>
+                    {onRegradeHistory && (
+                      <button
+                        onClick={async () => {
+                          const updated = await onRegradeHistory(item.id);
+                          if (updated && selectedExam?.id === item.id) {
+                            setSelectedExam(updated);
+                          }
+                        }}
+                        className="px-3 py-2 bg-amber-50 text-amber-700 border border-amber-200 font-bold text-xs rounded-lg hover:bg-amber-100 transition-colors flex items-center gap-1"
+                        title="Chấm lại theo đáp án hiện tại"
+                      >
+                        <span className="material-symbols-outlined text-sm">fact_check</span>
+                        Chấm lại
+                      </button>
+                    )}
+                    {onDeleteHistory && (
+                      <button
+                        onClick={() => onDeleteHistory(item.id)}
+                        className="p-2 bg-red-50 text-red-600 border border-red-200 font-bold text-xs rounded-lg hover:bg-red-100 transition-colors"
+                        title="Xóa bài thi này"
+                      >
+                        <span className="material-symbols-outlined text-sm">delete</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -170,7 +207,21 @@ export default function HistoryExams({ history, role }: HistoryExamsProps) {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-end">
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+              <div>
+                {(role === 'teacher' || role === 'admin') && onRegradeHistory && (
+                  <button
+                    onClick={async () => {
+                      const updated = await onRegradeHistory(selectedExam.id);
+                      if (updated) setSelectedExam(updated);
+                    }}
+                    className="px-4 py-2 bg-amber-500 text-white font-bold text-xs rounded-xl hover:bg-amber-600 transition-colors flex items-center gap-1.5 shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-base">fact_check</span>
+                    Chấm lại theo đáp án mới nhất
+                  </button>
+                )}
+              </div>
               <button 
                 onClick={() => setSelectedExam(null)}
                 className="px-6 py-2 bg-[#0058be] text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors"

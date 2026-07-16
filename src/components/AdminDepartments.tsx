@@ -22,6 +22,8 @@ export default function AdminDepartments() {
   const [error, setError] = useState<string | null>(null);
   const [showDeptModal, setShowDeptModal] = useState(false);
   const [showSubjectModal, setShowSubjectModal] = useState<string | null>(null); // holds department id
+  const [editingDept, setEditingDept] = useState<Department | null>(null);
+  const [editingSubject, setEditingSubject] = useState<{ deptId: string; subject: SubjectItem } | null>(null);
 
   // Dept Form state
   const [deptForm, setDeptForm] = useState({
@@ -60,10 +62,66 @@ export default function AdminDepartments() {
     fetchDepartments();
   }, []);
 
+  const openAddDept = () => {
+    setDeptForm({ name: '', head: '', teacherCount: 5 });
+    setEditingDept(null);
+    setShowDeptModal(true);
+  };
+
+  const openEditDept = (dept: Department) => {
+    setDeptForm({ name: dept.name, head: dept.head, teacherCount: dept.teacherCount });
+    setEditingDept(dept);
+    setShowDeptModal(true);
+  };
+
+  const openAddSubject = (deptId: string) => {
+    setSubForm({ code: '', name: '', credits: 3, questionCount: 50 });
+    setEditingSubject(null);
+    setShowSubjectModal(deptId);
+  };
+
+  const openEditSubject = (deptId: string, sub: SubjectItem) => {
+    setSubForm({ code: sub.code, name: sub.name, credits: sub.credits, questionCount: sub.questionCount });
+    setEditingSubject({ deptId, subject: sub });
+    setShowSubjectModal(deptId);
+  };
+
   const handleDeptSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    if (editingDept) {
+      authFetch(`/api/departments/${editingDept.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: deptForm.name,
+          head: deptForm.head || 'Chưa phân công',
+          teacherCount: Number(deptForm.teacherCount) || 0
+        })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Không thể cập nhật khoa.');
+          return res.json();
+        })
+        .then(() => {
+          setDepartments(prev => prev.map(d => d.id === editingDept.id ? {
+            ...d,
+            name: deptForm.name,
+            head: deptForm.head || 'Chưa phân công',
+            teacherCount: Number(deptForm.teacherCount) || 0
+          } : d));
+          setShowDeptModal(false);
+          setEditingDept(null);
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err.message);
+          setLoading(false);
+        });
+      return;
+    }
 
     const newId = `DEPT-${String(departments.length + 1).padStart(2, '0')}`;
     const newDept = {
@@ -99,6 +157,43 @@ export default function AdminDepartments() {
     if (!showSubjectModal) return;
     setLoading(true);
     setError(null);
+
+    if (editingSubject) {
+      authFetch(`/api/subjects/${editingSubject.subject.code}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: subForm.name,
+          credits: Number(subForm.credits),
+          questionCount: Number(subForm.questionCount) || 0,
+          deptId: editingSubject.deptId
+        })
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Không thể cập nhật học phần.');
+          return res.json();
+        })
+        .then(data => {
+          setDepartments(prev => prev.map(d => {
+            if (d.id === editingSubject.deptId) {
+              return {
+                ...d,
+                subjects: d.subjects.map(s => s.code === editingSubject.subject.code ? data : s)
+              };
+            }
+            return d;
+          }));
+          setShowSubjectModal(null);
+          setEditingSubject(null);
+          setSubForm({ code: '', name: '', credits: 3, questionCount: 50 });
+          setLoading(false);
+        })
+        .catch(err => {
+          setError(err.message);
+          setLoading(false);
+        });
+      return;
+    }
 
     const newSub = {
       code: subForm.code.toUpperCase(),
@@ -194,7 +289,7 @@ export default function AdminDepartments() {
           </p>
         </div>
         <button
-          onClick={() => setShowDeptModal(true)}
+          onClick={openAddDept}
           className="flex items-center justify-center gap-2 px-5 py-3 bg-[#0058be] text-white font-bold text-sm rounded-xl hover:bg-blue-700 transition-all shadow-lg self-start md:self-auto cursor-pointer"
           id="btn-add-dept"
         >
@@ -238,14 +333,23 @@ export default function AdminDepartments() {
                       <p className="text-[10px] font-mono font-bold text-gray-400 mt-0.5">{dept.id}</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => deleteDepartment(dept.id)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                    title="Giải thể khoa"
-                    id={`btn-del-dept-${dept.id}`}
-                  >
-                    <span className="material-symbols-outlined text-sm">delete</span>
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openEditDept(dept)}
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                      title="Chỉnh sửa khoa"
+                    >
+                      <span className="material-symbols-outlined text-sm">edit</span>
+                    </button>
+                    <button
+                      onClick={() => deleteDepartment(dept.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                      title="Giải thể khoa"
+                      id={`btn-del-dept-${dept.id}`}
+                    >
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Meta details */}
@@ -269,7 +373,7 @@ export default function AdminDepartments() {
                   <div className="flex justify-between items-center border-b border-gray-100 pb-1.5">
                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Học phần liên kết ({dept.subjects.length})</span>
                     <button
-                      onClick={() => setShowSubjectModal(dept.id)}
+                      onClick={() => openAddSubject(dept.id)}
                       className="text-xs font-bold text-[#0058be] hover:underline flex items-center gap-0.5 cursor-pointer"
                       id={`btn-add-subject-to-${dept.id}`}
                     >
@@ -293,13 +397,22 @@ export default function AdminDepartments() {
                               <span>Ngân hàng: {sub.questionCount} câu hỏi</span>
                             </div>
                           </div>
-                          <button
-                            onClick={() => deleteSubject(dept.id, sub.code)}
-                            className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
-                            title="Xóa học phần"
-                          >
-                            <span className="material-symbols-outlined text-xs">close</span>
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => openEditSubject(dept.id, sub)}
+                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors cursor-pointer"
+                              title="Sửa học phần"
+                            >
+                              <span className="material-symbols-outlined text-xs">edit</span>
+                            </button>
+                            <button
+                              onClick={() => deleteSubject(dept.id, sub.code)}
+                              className="p-1 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+                              title="Xóa học phần"
+                            >
+                              <span className="material-symbols-outlined text-xs">close</span>
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -320,11 +433,11 @@ export default function AdminDepartments() {
           <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[#0058be] text-2xl">domain_add</span>
-                <h2 className="text-lg font-bold text-[#191c1d]">Thành lập Khoa mới</h2>
+                <span className="material-symbols-outlined text-[#0058be] text-2xl">{editingDept ? 'edit' : 'domain_add'}</span>
+                <h2 className="text-lg font-bold text-[#191c1d]">{editingDept ? 'Cập nhật thông tin Khoa' : 'Thành lập Khoa mới'}</h2>
               </div>
               <button
-                onClick={() => setShowDeptModal(false)}
+                onClick={() => { setShowDeptModal(false); setEditingDept(null); }}
                 className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors"
               >
                 <span className="material-symbols-outlined">close</span>
@@ -370,7 +483,7 @@ export default function AdminDepartments() {
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowDeptModal(false)}
+                  onClick={() => { setShowDeptModal(false); setEditingDept(null); }}
                   className="px-4 py-2 border border-[#c2c6d6] text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   Hủy bỏ
@@ -379,7 +492,7 @@ export default function AdminDepartments() {
                   type="submit"
                   className="px-5 py-2 bg-[#0058be] text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors"
                 >
-                  Thành lập Khoa
+                  {editingDept ? 'Lưu thay đổi' : 'Thành lập Khoa'}
                 </button>
               </div>
             </form>
@@ -394,11 +507,11 @@ export default function AdminDepartments() {
           <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[#0058be] text-2xl">add_card</span>
-                <h2 className="text-lg font-bold text-[#191c1d]">Thêm Học phần / Bộ môn</h2>
+                <span className="material-symbols-outlined text-[#0058be] text-2xl">{editingSubject ? 'edit' : 'add_card'}</span>
+                <h2 className="text-lg font-bold text-[#191c1d]">{editingSubject ? 'Cập nhật Học phần' : 'Thêm Học phần / Bộ môn'}</h2>
               </div>
               <button
-                onClick={() => setShowSubjectModal(null)}
+                onClick={() => { setShowSubjectModal(null); setEditingSubject(null); }}
                 className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors"
               >
                 <span className="material-symbols-outlined">close</span>
@@ -411,9 +524,10 @@ export default function AdminDepartments() {
                   <label className="text-xs font-bold text-gray-600">Mã Học phần</label>
                   <input
                     type="text"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0058be] outline-none text-xs"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0058be] outline-none text-xs disabled:bg-gray-100"
                     placeholder="CS-101"
                     value={subForm.code}
+                    disabled={!!editingSubject}
                     onChange={(e) => setSubForm(prev => ({ ...prev, code: e.target.value }))}
                     required
                   />
@@ -459,7 +573,7 @@ export default function AdminDepartments() {
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => setShowSubjectModal(null)}
+                  onClick={() => { setShowSubjectModal(null); setEditingSubject(null); }}
                   className="px-4 py-2 border border-[#c2c6d6] text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   Hủy bỏ
@@ -468,7 +582,7 @@ export default function AdminDepartments() {
                   type="submit"
                   className="px-5 py-2 bg-[#0058be] text-white font-bold text-xs rounded-xl hover:bg-blue-700 transition-colors"
                 >
-                  Thêm học phần
+                  {editingSubject ? 'Lưu thay đổi' : 'Thêm học phần'}
                 </button>
               </div>
             </form>

@@ -42,6 +42,47 @@ export default function StudentDashboard({ userName, activeExams, onStartExam, c
 
   const gpaInfo = calculateGPA();
 
+  // Calculate dynamic study hours from completed exams + preparation estimate
+  const calculateStudyHours = () => {
+    if (!examHistory || examHistory.length === 0) return '0.0 giờ';
+    const totalMinutes = examHistory.reduce((sum, h) => {
+      const qCount = h.questionsDetail ? h.questionsDetail.length : 30;
+      return sum + (qCount * 1.5);
+    }, 0);
+    const hours = (totalMinutes * 1.5) / 60;
+    return `${hours.toFixed(1)} giờ`;
+  };
+
+  // Calculate dynamic subject progress from active and completed exams
+  const calculateSubjectProgress = () => {
+    const subjectsMap: { [key: string]: { total: number; completed: number } } = {};
+    activeExams.forEach(e => {
+      const sub = e.subject || 'Kiểm tra chung';
+      if (!subjectsMap[sub]) subjectsMap[sub] = { total: 0, completed: 0 };
+      subjectsMap[sub].total += 1;
+    });
+    examHistory.forEach(h => {
+      const sub = h.department || (h.title ? h.title.split('-')[0].trim() : 'Kiểm tra chung');
+      if (!subjectsMap[sub]) subjectsMap[sub] = { total: 0, completed: 0 };
+      subjectsMap[sub].completed += 1;
+      if (subjectsMap[sub].total < subjectsMap[sub].completed) {
+        subjectsMap[sub].total = subjectsMap[sub].completed;
+      }
+    });
+
+    const entries = Object.entries(subjectsMap);
+    if (entries.length === 0) {
+      return [{ name: 'Học phần Đại cương', percent: 0 }];
+    }
+    return entries.slice(0, 4).map(([name, stats]) => {
+      const pct = stats.total > 0 ? Math.round((stats.completed / (stats.total + (stats.completed === stats.total ? 0 : 1))) * 100) : 0;
+      return { name, percent: Math.min(100, Math.max(10, pct)) };
+    });
+  };
+
+  const studyHours = calculateStudyHours();
+  const subjectProgressList = calculateSubjectProgress();
+
   return (
     <div className="space-y-8">
       {/* Welcome Header */}
@@ -87,7 +128,7 @@ export default function StudentDashboard({ userName, activeExams, onStartExam, c
             <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider">Số giờ tự học</p>
           </div>
           <h3 className="text-2xl font-bold text-[#191c1d] mt-2">
-            12.5 giờ <span className="text-xs font-normal text-gray-400">tuần này</span>
+            {studyHours} <span className="text-xs font-normal text-gray-400">tích lũy</span>
           </h3>
         </div>
 
@@ -208,33 +249,17 @@ export default function StudentDashboard({ userName, activeExams, onStartExam, c
         <div className="bg-white border border-[#c2c6d6] rounded-2xl p-6 shadow-sm">
           <h3 className="text-base font-bold text-[#191c1d] mb-6">Tiến độ khóa học</h3>
           <div className="space-y-6">
-            <div>
-              <div className="flex justify-between text-xs font-semibold mb-2">
-                <span className="text-[#191c1d]">Toán học thuần túy (MTH-302)</span>
-                <span className="text-[#0058be] font-bold">85%</span>
+            {subjectProgressList.map((item, idx) => (
+              <div key={idx}>
+                <div className="flex justify-between text-xs font-semibold mb-2">
+                  <span className="text-[#191c1d] truncate max-w-[180px]">{item.name}</span>
+                  <span className="text-[#0058be] font-bold">{item.percent}%</span>
+                </div>
+                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-[#0058be] rounded-full transition-all duration-500" style={{ width: `${item.percent}%` }}></div>
+                </div>
               </div>
-              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-[#0058be] rounded-full transition-all duration-500" style={{ width: '85%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs font-semibold mb-2">
-                <span className="text-[#191c1d]">Sinh vật lý (BIO-221)</span>
-                <span className="text-[#0058be] font-bold">62%</span>
-              </div>
-              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-[#0058be] rounded-full transition-all duration-500" style={{ width: '62%' }}></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-xs font-semibold mb-2">
-                <span className="text-[#191c1d]">Đạo đức công nghệ (CS-401)</span>
-                <span className="text-[#0058be] font-bold">98%</span>
-              </div>
-              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-[#0058be] rounded-full transition-all duration-500" style={{ width: '98%' }}></div>
-              </div>
-            </div>
+            ))}
           </div>
 
           <div className="mt-8 pt-8 border-t border-gray-100">

@@ -15,13 +15,38 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
 
   const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '0.0';
   
-  const sortedQuestions = [...questions].sort((a, b) => (b.errorRate || 0) - (a.errorRate || 0));
+  // Track dynamic attempts from history
+  const qAttempts: Record<string, { total: number; wrong: number }> = {};
+  history.forEach(h => {
+    if (h.questionsDetail && Array.isArray(h.questionsDetail)) {
+      h.questionsDetail.forEach(d => {
+        const key = d.questionId || d.questionText;
+        if (!key) return;
+        if (!qAttempts[key]) qAttempts[key] = { total: 0, wrong: 0 };
+        qAttempts[key].total += 1;
+        if (!d.isCorrect) qAttempts[key].wrong += 1;
+      });
+    }
+  });
+
+  const questionsWithDynamicRate = questions.map(q => {
+    const attempts = qAttempts[q.id] || qAttempts[q.content];
+    if (attempts && attempts.total > 0) {
+      return {
+        ...q,
+        errorRate: Math.round((attempts.wrong / attempts.total) * 100)
+      };
+    }
+    return q;
+  });
+
+  const sortedQuestions = [...questionsWithDynamicRate].sort((a, b) => (b.errorRate || 0) - (a.errorRate || 0));
   const hardestQId = sortedQuestions.length > 0 ? sortedQuestions[0].id : 'N/A';
 
   const stats = {
     avgScore: `${avg} / 10`,
     completionRate: history.length > 0 ? '98.2%' : '0.0%',
-    activeStudents: String(new Set(history.map(h => h.id)).size || history.length),
+    activeStudents: String(new Set(history.map(h => h.userEmail || h.userName || h.id)).size || 0),
     hardestQuestion: hardestQId,
     avgTimeSpent: history.length > 0 ? '54 phút' : '0 phút'
   };
@@ -50,9 +75,9 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
     });
   }
 
-  // Hard questions table - filtered from our database
-  const hardestQuestions = questions
-    .filter(q => q.errorRate && q.errorRate > 40)
+  // Hard questions table - filtered from our database with dynamic error rates
+  const hardestQuestions = questionsWithDynamicRate
+    .filter(q => q.errorRate && q.errorRate > 0)
     .sort((a, b) => (b.errorRate || 0) - (a.errorRate || 0));
 
   const [searchTerm, setSearchTerm] = useState('');

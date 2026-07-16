@@ -20,7 +20,11 @@ export interface ExamHistory {
   score: string;
   result: 'Đạt' | 'Không đạt';
   iconName: string; // e.g., functions, code, psychology, biotech
+  userEmail?: string;
+  userName?: string;
   questionsDetail?: {
+    questionId?: string;
+    selectedOptionIndex?: number;
     questionNum: number;
     questionText: string;
     userAnswer: string;
@@ -39,8 +43,15 @@ export interface ActiveExam {
   iconName: string;
   category: string;
   class_id?: number | null;
+  difficultyDistribution?: {
+    easy: number;
+    medium: number;
+    hard: number;
+  };
   questionIds?: string; // JSON array of question IDs, selected at exam creation time
   className?: string; // joined class name for display
+  class_name?: string; // exact SQL joined class name
+  class_code?: string; // exact SQL joined class code
 }
 
 export interface NewExamConfig {

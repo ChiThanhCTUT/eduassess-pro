@@ -4,7 +4,7 @@ import { ActiveExam, ClassItem } from '../types';
 import { authFetch } from '../api';
 
 interface CreateExamProps {
-  onCreateExam: (newExam: ActiveExam) => void;
+  onCreateExam: (newExam: ActiveExam) => Promise<boolean | void> | void;
 }
 
 export default function CreateExam({ onCreateExam }: CreateExamProps) {
@@ -62,7 +62,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
   const mediumCount = Math.round((questionCount * mediumPercent) / 100);
   const hardCount = questionCount - easyCount - mediumCount;
 
-  const handleCreate = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!examTitle.trim()) {
@@ -93,11 +93,21 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
       description: description,
       iconName: iconNameMap[subject] || 'code',
       category: category.toUpperCase() || 'CHƯA PHÂN LOẠI',
-      class_id: selectedClassId
+      class_id: selectedClassId,
+      difficultyDistribution: {
+        easy: easyPercent,
+        medium: mediumPercent,
+        hard: hardPercent
+      }
     };
 
-    onCreateExam(newExam);
-    alert(`Đề thi "${examTitle}" đã được tạo thành công và xuất bản đến thí sinh!`);
+    try {
+      const result = await onCreateExam(newExam);
+      if (result === false) return; // backend error handled in App.tsx
+      alert(`Đề thi "${examTitle}" đã được tạo thành công và xuất bản đến thí sinh!`);
+    } catch (err: any) {
+      alert(`Lỗi tạo đề thi: ${err.message || 'Không thể tạo đề thi.'}`);
+    }
   };
 
   return (

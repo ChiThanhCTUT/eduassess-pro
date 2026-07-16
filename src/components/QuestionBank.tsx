@@ -19,6 +19,8 @@ export default function QuestionBank({ questions, onAddQuestion, onEditQuestion,
   const [selectedSubject, setSelectedSubject] = useState('Tất cả môn học');
   const [selectedDifficulty, setSelectedDifficulty] = useState('Tất cả độ khó');
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -124,10 +126,22 @@ export default function QuestionBank({ questions, onAddQuestion, onEditQuestion,
   // Filtering Logic
   const filteredQuestions = questions.filter(q => {
     const matchSearch = q.content.toLowerCase().includes(searchTerm.toLowerCase()) || q.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchSubject = selectedSubject === 'Tất cả môn học' || q.subject.toLowerCase() === selectedSubject.toLowerCase();
-    const matchDifficulty = selectedDifficulty === 'Tất cả độ khó' || q.difficulty === selectedDifficulty;
+    const matchSubject = selectedSubject === 'Tất cả môn học' || (q.subject || '').toLowerCase() === selectedSubject.toLowerCase();
+    const diff = (q.difficulty || '').toLowerCase();
+    const matchDifficulty = selectedDifficulty === 'Tất cả độ khó' || 
+      diff === selectedDifficulty.toLowerCase() ||
+      (selectedDifficulty === 'Dễ' && diff === 'easy') ||
+      (selectedDifficulty === 'Trung bình' && diff === 'medium') ||
+      (selectedDifficulty === 'Khó' && diff === 'hard');
     return matchSearch && matchSubject && matchDifficulty;
   });
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedSubject, selectedDifficulty]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredQuestions.length / itemsPerPage));
+  const paginatedQuestions = filteredQuestions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-8">
@@ -201,8 +215,8 @@ export default function QuestionBank({ questions, onAddQuestion, onEditQuestion,
               </tr>
             </thead>
             <tbody className="divide-y divide-[#c2c6d6]">
-              {filteredQuestions.length > 0 ? (
-                filteredQuestions.map((q) => (
+              {paginatedQuestions.length > 0 ? (
+                paginatedQuestions.map((q) => (
                   <tr key={q.id} className="hover:bg-[#f3f4f5]/40 transition-colors group">
                     <td className="px-6 py-4 text-xs font-mono font-bold text-gray-500">{q.id}</td>
                     <td className="px-6 py-4 text-sm text-[#191c1d] max-w-md truncate" title={q.content}>
@@ -254,14 +268,32 @@ export default function QuestionBank({ questions, onAddQuestion, onEditQuestion,
         {/* Footer meta */}
         <div className="px-6 py-4 bg-[#f3f4f5]/60 border-t border-[#c2c6d6] flex items-center justify-between">
           <p className="text-xs font-medium text-gray-500">
-            Hiển thị 1 đến {filteredQuestions.length} trong tổng số {filteredQuestions.length} câu hỏi phù hợp
+            Hiển thị {paginatedQuestions.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} đến {Math.min(currentPage * itemsPerPage, filteredQuestions.length)} trong tổng số {filteredQuestions.length} câu hỏi phù hợp
           </p>
           <div className="flex items-center gap-1.5">
-            <button className="p-1.5 border border-[#c2c6d6] bg-white rounded hover:bg-gray-50 disabled:opacity-40" disabled>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="p-1.5 border border-[#c2c6d6] bg-white rounded hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
               <span className="material-symbols-outlined text-sm">chevron_left</span>
             </button>
-            <button className="w-7 h-7 flex items-center justify-center bg-[#0058be] text-white rounded text-xs font-bold">1</button>
-            <button className="p-1.5 border border-[#c2c6d6] bg-white rounded hover:bg-gray-50 disabled:opacity-40" disabled>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`w-7 h-7 flex items-center justify-center rounded text-xs font-bold transition-colors ${
+                  currentPage === page ? 'bg-[#0058be] text-white shadow-sm' : 'border border-[#c2c6d6] bg-white text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="p-1.5 border border-[#c2c6d6] bg-white rounded hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            >
               <span className="material-symbols-outlined text-sm">chevron_right</span>
             </button>
           </div>

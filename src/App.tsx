@@ -88,6 +88,10 @@ export default function App() {
   }, [isLoggedIn]);
 
   const handleLogin = (userRole: Role, name: string, sid?: string, token?: string) => {
+    if (!token) {
+      alert('Lỗi xác thực Token: Không thể đăng nhập vào hệ thống mà không có token hợp lệ.');
+      return;
+    }
     setRole(userRole);
     setUserName(name);
     setStudentId(sid || '');
@@ -98,9 +102,7 @@ export default function App() {
     localStorage.setItem('userRole', userRole);
     localStorage.setItem('userName', name);
     localStorage.setItem('studentId', sid || '');
-    if (token) {
-      localStorage.setItem('userToken', token);
-    }
+    localStorage.setItem('userToken', token);
 
     // Route to first valid tab
     if (userRole === 'student') {
@@ -144,6 +146,30 @@ export default function App() {
       .catch(err => console.error('Error saving exam history:', err));
   };
 
+  const handleDeleteHistory = (id: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bài thi này khỏi lịch sử?')) return;
+    authFetch(`/api/history/${encodeURIComponent(id)}`, { method: 'DELETE' })
+      .then(handleResponse)
+      .then(() => {
+        setExamHistory(prev => prev.filter(h => h.id !== id));
+      })
+      .catch(err => console.error('Error deleting history item:', err));
+  };
+
+  const handleRegradeHistory = async (id: string): Promise<ExamHistory | void> => {
+    if (!window.confirm('Bạn có chắc chắn muốn chấm lại bài thi này theo đáp án mới nhất trong ngân hàng câu hỏi?')) return;
+    try {
+      const res = await authFetch(`/api/history/${encodeURIComponent(id)}/regrade`, { method: 'POST' });
+      const data = await handleResponse(res);
+      setExamHistory(prev => prev.map(h => (h.id === data.id ? data : h)));
+      alert(`Đã chấm lại bài thi thành công. Điểm mới: ${data.score} (${data.result})`);
+      return data;
+    } catch (err) {
+      console.error('Error regrading history item:', err);
+      alert('Không thể chấm lại bài thi.');
+    }
+  };
+
   // Admin Question Bank workflow
   const handleAddQuestion = (newQ: Question) => {
     authFetch('/api/questions', {
@@ -185,18 +211,22 @@ export default function App() {
   };
 
   // Create Exam workflow
-  const handleCreateExam = (newExam: ActiveExam) => {
-    authFetch('/api/exams', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newExam)
-    })
-      .then(handleResponse)
-      .then(data => {
-        setActiveExams(prev => [data, ...prev]);
-        setCurrentTab('dashboard'); // route back to let students see it
-      })
-      .catch(err => console.error('Error creating exam:', err));
+  const handleCreateExam = async (newExam: ActiveExam): Promise<boolean> => {
+    try {
+      const res = await authFetch('/api/exams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newExam)
+      });
+      const data = await handleResponse(res);
+      setActiveExams(prev => [data, ...prev]);
+      setCurrentTab('dashboard'); // route back to let students see it
+      return true;
+    } catch (err: any) {
+      alert(err.message || 'Lỗi không thể xuất bản đề thi.');
+      console.error('Error creating exam:', err);
+      return false;
+    }
   };
 
   // Render Full-Screen Exam Session
@@ -265,10 +295,12 @@ export default function App() {
             <ExamAnalytics questions={questions} history={examHistory} />
           )}
 
-          {currentTab === 'history' && (role === 'student' || role === 'teacher') && (
+          {currentTab === 'history' && (role === 'student' || role === 'teacher' || role === 'admin') && (
             <HistoryExams 
               history={examHistory}
               role={role}
+              onDeleteHistory={handleDeleteHistory}
+              onRegradeHistory={handleRegradeHistory}
             />
           )}
 

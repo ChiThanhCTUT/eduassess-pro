@@ -30,6 +30,7 @@ export default function AdminUsers() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
     role: 'student' as 'student' | 'teacher' | 'admin',
     department: 'Khoa CNTT',
     status: 'Active' as 'Active' | 'Suspended',
@@ -75,7 +76,7 @@ export default function AdminUsers() {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: name === 'class_id' ? (value ? Number(value) : null) : value
     }));
   };
 
@@ -84,6 +85,7 @@ export default function AdminUsers() {
     setFormData({
       name: '',
       email: '',
+      password: '',
       role: 'student',
       department: 'Khoa CNTT',
       status: 'Active',
@@ -99,6 +101,7 @@ export default function AdminUsers() {
     setFormData({
       name: user.name,
       email: user.email,
+      password: '',
       role: user.role,
       department: user.department,
       status: user.status,
@@ -108,23 +111,29 @@ export default function AdminUsers() {
   };
 
   // Submit Handler
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.password && formData.password.length < 8) {
+      setError('Mật khẩu phải có ít nhất 8 ký tự.');
+      return;
+    }
     setLoading(true);
     setError(null);
     if (editingUser) {
-      // Edit mode
+      // Edit mode: only include password if user typed a new one
+      const payload = formData.password ? formData : (({ password, ...rest }) => rest)(formData);
       authFetch(`/api/users/${editingUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload)
       })
-        .then(res => {
-          if (!res.ok) throw new Error('Không thể cập nhật tài khoản.');
-          return res.json();
+        .then(async res => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Không thể cập nhật tài khoản.');
+          return data;
         })
-        .then(() => {
-          setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...formData } : u));
+        .then(data => {
+          setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...data, id: String(data.id || u.id) } : u));
           setShowAddModal(false);
           setLoading(false);
         })
@@ -133,19 +142,17 @@ export default function AdminUsers() {
           setLoading(false);
         });
     } else {
-      // Add mode
-      const payload = {
-        ...formData,
-        password: '12345678'
-      };
+      // Add mode: if empty, backend will auto-generate secure password
+      const payload = formData.password ? formData : (({ password, ...rest }) => rest)(formData);
       authFetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-        .then(res => {
-          if (!res.ok) throw new Error('Không thể tạo tài khoản mới.');
-          return res.json();
+        .then(async res => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Không thể tạo tài khoản mới.');
+          return data;
         })
         .then(data => {
           const newUser: UserAccount = {
@@ -155,6 +162,9 @@ export default function AdminUsers() {
           setUsers(prev => [newUser, ...prev]);
           setShowAddModal(false);
           setLoading(false);
+          if (data.initialPassword) {
+            alert(`Tài khoản "${data.email}" đã được tạo thành công!\nMật khẩu khởi tạo an toàn tự động: ${data.initialPassword}\nVui lòng lưu lại để gửi cho người dùng.`);
+          }
         })
         .catch(err => {
           setError(err.message);
@@ -483,6 +493,18 @@ export default function AdminUsers() {
                   value={formData.email}
                   onChange={handleInputChange}
                   required
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-gray-600">Mật khẩu {editingUser ? '(Để trống nếu không thay đổi)' : '(Để trống để tự tạo mật khẩu ngẫu nhiên an toàn)'}</label>
+                <input
+                  type="password"
+                  name="password"
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0058be] focus:border-transparent outline-none text-xs"
+                  placeholder={editingUser ? '••••••••' : 'Nhập mật khẩu >= 8 ký tự hoặc để trống...'}
+                  value={formData.password}
+                  onChange={handleInputChange}
                 />
               </div>
 
