@@ -64,6 +64,16 @@ export default function App() {
     return 'dashboard';
   });
 
+  React.useEffect(() => {
+    const handleSessionExpired = () => {
+      setIsLoggedIn(false);
+      setTakingExam(null);
+      alert('Phiên làm việc (Token) của bạn đã hết hạn hoặc không hợp lệ. Vui lòng đăng nhập lại.');
+    };
+    window.addEventListener('session-expired', handleSessionExpired);
+    return () => window.removeEventListener('session-expired', handleSessionExpired);
+  }, []);
+
   // Fetch initial data from MySQL database via Express API
   React.useEffect(() => {
     if (!isLoggedIn) return; // Only fetch if logged in

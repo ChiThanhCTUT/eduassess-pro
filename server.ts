@@ -19,7 +19,7 @@ function generateToken(user: { email: string; role: string; name: string; studen
     name: user.name,
     studentId: user.studentId,
     class_id: user.class_id || null,
-    exp: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
+    exp: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
   });
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
   return Buffer.from(payload).toString('base64') + '.' + signature;
@@ -931,42 +931,6 @@ async function initializeDatabase() {
       });
     } catch (err: any) {
       res.status(500).json({ error: 'Lỗi đăng nhập hệ thống.' });
-    }
-  });
-
-  // POST mock OAuth login (for Google / Microsoft buttons)
-  app.post('/api/auth/mock-oauth', async (req, res) => {
-    try {
-      const { provider } = req.body;
-      const email = 'alex.johnson@university.edu.vn';
-      const [users] = await pool.query(
-        'SELECT name, role, studentId, status, class_id FROM users WHERE email = ?',
-        [email]
-      );
-
-      if ((users as any[]).length === 0) {
-        return res.status(404).json({ error: 'Tài khoản mặc định cho OAuth không tồn tại.' });
-      }
-
-      const user = (users as any[])[0];
-      if (user.status === 'Suspended') {
-        return res.status(403).json({ error: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.' });
-      }
-
-      const tokenUser = { email, role: user.role, name: user.name, studentId: user.studentId || '', class_id: user.class_id || null };
-      res.json({
-        message: `Đăng nhập qua ${provider || 'OAuth'} thành công.`,
-        token: generateToken(tokenUser),
-        user: {
-          email,
-          name: user.name,
-          role: normalizeRole(user.role),
-          studentId: user.studentId,
-          class_id: user.class_id || null
-        }
-      });
-    } catch (err: any) {
-      res.status(500).json({ error: 'Lỗi đăng nhập OAuth.' });
     }
   });
 

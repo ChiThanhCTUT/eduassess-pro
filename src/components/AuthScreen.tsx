@@ -46,30 +46,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       });
   };
 
-  const handleOAuthLogin = (provider: 'Google' | 'Microsoft') => {
-    setError(null);
-    setLoading(true);
-
-    fetch('/api/auth/mock-oauth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider })
-    })
-      .then(async res => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || `Đăng nhập ${provider} thất bại.`);
-        return data;
-      })
-      .then(data => {
-        setLoading(false);
-        onLogin(data.user.role, data.user.name, data.user.studentId, data.token);
-      })
-      .catch(err => {
-        setLoading(false);
-        setError(err.message);
-      });
-  };
-
 
 
   return (
@@ -208,35 +184,6 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
                   </button>
                 </form>
               </div>
-
-            {/* Alternative Logins */}
-            <div className="mt-8">
-              <div className="relative flex items-center mb-6">
-                <div className="flex-grow border-t border-gray-200"></div>
-                <span className="flex-shrink mx-4 text-xs font-semibold text-gray-400 uppercase tracking-wider">Hoặc tiếp tục với</span>
-                <div className="flex-grow border-t border-gray-200"></div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <button 
-                  type="button"
-                  onClick={() => handleOAuthLogin('Google')}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-xs font-semibold text-gray-700"
-                >
-                  <img alt="Google" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDnFPgSbXgrTRg1i2MFSHsl_lhaEsXEVPK1c26CM2cn0GoXi8OtORYLejQ-J9es_GiUuIVfk7JhJiQ2RMaviqKlfC1rVbbo9YLwZb89LNIr5nk2Y9kYhOBHPTQ4f7MOZhuU4w0P-LVrZ62VQu5QKMxrXoNj3O7nD9CNYTw4i_Lg6hkgN4sgsOVSlfxtaxLtEfKJl7H04We2agw56iXt9f2PskW-AKW5edwe-UE-lAIm3o-mdLnZek6nFjlCNyA5lTonEkIEgWo_fU_g"/>
-                  Google
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => handleOAuthLogin('Microsoft')}
-                  disabled={loading}
-                  className="flex items-center justify-center gap-2 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors text-xs font-semibold text-gray-700"
-                >
-                  <img alt="Microsoft" className="w-4 h-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDr2WiIpS8MK6msI36tUT9vCFupMJk3sTFFad8IAvTzXG5bQe2KK62wQc0dyCkfH55kZnbKTCr7T8Hz3M84dBRsA-IaZPCgjTE1lsSWfU47vi19A5fxOAXIZ03OCjwi07Y_WAcbdRCs_U2lDlrrljxgMzpDlHon7OYA_MHI6VRRtQGmXRKmR9svKVgUXWT9dHoUpfdre3kiZr9aAWyWPrjTnYn4ZSr4CT9bTxOaLkCTeM8698Llk_7keAdF3R112z5euDoe-UpyhVSA"/>
-                  Microsoft
-                </button>
-              </div>
-            </div>
 
             <footer className="mt-10 text-center">
               <p className="text-[11px] text-gray-400 leading-relaxed">
