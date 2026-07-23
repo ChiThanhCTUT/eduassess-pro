@@ -5,11 +5,21 @@ import path from 'path';
 import crypto from 'crypto';
 import { initialQuestions, initialActiveExams, initialExamHistory } from './src/data';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'eduassess_secret_session_key_2026';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 
-function hashPassword(password: string, email: string): string {
+import bcrypt from 'bcrypt';
+
+function legacyHashPassword(password: string, email: string): string {
   const systemSalt = 'EduAssessSystemSalt2026#';
   return crypto.createHash('sha256').update(password + email.toLowerCase().trim() + systemSalt).digest('hex');
+}
+
+async function hashPasswordAsync(password: string): Promise<string> {
+  return await bcrypt.hash(password, 10);
+}
+
+function hashPasswordSync(password: string): string {
+  return bcrypt.hashSync(password, 10);
 }
 
 function generateToken(user: { email: string; role: string; name: string; studentId: string; class_id?: number | null }): string {
@@ -41,7 +51,7 @@ function verifyToken(token: string): any | null {
   }
 }
 
-function authenticateToken(req: any, res: any, next: any) {
+async function authenticateToken(req: any, res: any, next: any) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
   if (!token) {
@@ -51,6 +61,22 @@ function authenticateToken(req: any, res: any, next: any) {
   if (!user) {
     return res.status(403).json({ error: 'Token không hợp lệ hoặc đã hết hạn.' });
   }
+
+  // Synchronize status and role with Database
+  try {
+    const [rows] = await pool.query('SELECT status, role FROM users WHERE email = ?', [user.email]);
+    if ((rows as any[]).length === 0) {
+      return res.status(403).json({ error: 'Tài khoản không tồn tại.' });
+    }
+    const dbUser = (rows as any[])[0];
+    if (dbUser.status === 'Suspended') {
+      return res.status(403).json({ error: 'Tài khoản của bạn đã bị khóa bởi quản trị viên.' });
+    }
+    user.role = dbUser.role; // Update to latest role dynamically
+  } catch (err) {
+    return res.status(500).json({ error: 'Lỗi xác thực đồng bộ trạng thái.' });
+  }
+
   req.user = user;
   next();
 }
@@ -202,6 +228,12 @@ async function initializeDatabase() {
     } catch (e) {}
     try {
       await pool.query("ALTER TABLE active_exams ADD COLUMN difficultyDistribution TEXT DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE active_exams ADD COLUMN startTime VARCHAR(100) DEFAULT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE active_exams ADD COLUMN endTime VARCHAR(100) DEFAULT NULL");
     } catch (e) {}
     try {
       await pool.query("ALTER TABLE exam_history ADD COLUMN userEmail VARCHAR(150) NOT NULL");
@@ -400,7 +432,7 @@ async function initializeDatabase() {
       }
     ];
     for (const user of defaultUsers) {
-      const hashedPass = hashPassword(user.plainPass, user.email);
+      const hashedPass = hashPasswordSync(user.plainPass);
       const [exists] = await pool.query('SELECT id FROM users WHERE email = ?', [user.email]);
       if ((exists as any[]).length === 0) {
         await pool.query(
@@ -587,10 +619,35 @@ async function initializeDatabase() {
   });
 
   // PUT update question
-  app.put('/api/questions/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+  app.put('/api/questions/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req: any, res) => {
     try {
       const { id } = req.params;
       const q = req.body;
+      
+      if (req.user.role === 'teacher') {
+        const [qRows] = await pool.query('SELECT subject FROM questions WHERE id = ?', [id]);
+        if ((qRows as any[]).length === 0) return res.status(404).json({error: 'Không tìm thấy câu hỏi.'});
+        const oldSubject = (qRows as any[])[0].subject;
+
+        const [oldValidSubs] = await pool.query(
+          'SELECT s.id FROM subjects s JOIN departments d ON s.deptId = d.id WHERE s.name = ? AND d.name = ?',
+          [oldSubject, req.user.department]
+        );
+        if ((oldValidSubs as any[]).length === 0) {
+          return res.status(403).json({error: 'Bạn không có quyền sửa câu hỏi thuộc khoa khác.'});
+        }
+
+        if (q.subject && q.subject !== oldSubject) {
+          const [newValidSubs] = await pool.query(
+            'SELECT s.id FROM subjects s JOIN departments d ON s.deptId = d.id WHERE s.name = ? AND d.name = ?',
+            [q.subject, req.user.department]
+          );
+          if ((newValidSubs as any[]).length === 0) {
+            return res.status(403).json({error: 'Bạn không được phép chuyển câu hỏi sang môn của khoa khác.'});
+          }
+        }
+      }
+
       await pool.query(
         'UPDATE questions SET content = ?, subject = ?, difficulty = ?, options = ?, correctAnswer = ?, topic = ?, avgTime = ?, errorRate = ? WHERE id = ?',
         [q.content, q.subject, q.difficulty, JSON.stringify(q.options), q.correctAnswer, q.topic, q.avgTime, q.errorRate, id]
@@ -602,9 +659,24 @@ async function initializeDatabase() {
   });
 
   // DELETE question
-  app.delete('/api/questions/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
+  app.delete('/api/questions/:id', authenticateToken, requireRole(['teacher', 'admin']), async (req: any, res) => {
     try {
       const { id } = req.params;
+
+      if (req.user.role === 'teacher') {
+        const [qRows] = await pool.query('SELECT subject FROM questions WHERE id = ?', [id]);
+        if ((qRows as any[]).length === 0) return res.status(404).json({error: 'Không tìm thấy câu hỏi.'});
+        const subjectName = (qRows as any[])[0].subject;
+
+        const [validSubs] = await pool.query(
+          'SELECT s.id FROM subjects s JOIN departments d ON s.deptId = d.id WHERE s.name = ? AND d.name = ?',
+          [subjectName, req.user.department]
+        );
+        if ((validSubs as any[]).length === 0) {
+          return res.status(403).json({error: 'Bạn không có quyền xóa câu hỏi thuộc khoa khác.'});
+        }
+      }
+
       await pool.query('DELETE FROM questions WHERE id = ?', [id]);
       res.json({ message: 'Question deleted successfully' });
     } catch (err: any) {
@@ -656,7 +728,20 @@ async function initializeDatabase() {
   app.post('/api/exams', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
     try {
       const exam = req.body;
-      const { subject, questionCount, class_id, difficultyDistribution } = exam;
+      const { title, subject, duration, questionCount, class_id, difficultyDistribution } = exam;
+
+      if (!title || !title.trim()) {
+        return res.status(400).json({ error: 'Tiêu đề đề thi không được để trống.' });
+      }
+      if (!subject || !subject.trim()) {
+        return res.status(400).json({ error: 'Môn học không được để trống.' });
+      }
+      if (typeof duration !== 'number' || duration <= 0) {
+        return res.status(400).json({ error: 'Thời lượng thi phải là số lớn hơn 0.' });
+      }
+      if (typeof questionCount !== 'number' || questionCount <= 0) {
+        return res.status(400).json({ error: 'Số lượng câu hỏi phải lớn hơn 0.' });
+      }
 
       // Validate: count available questions for this subject
       const [availableRows] = await pool.query(
@@ -776,6 +861,33 @@ async function initializeDatabase() {
       let finalScoreStr = h.score;
       let finalResultStr = h.result;
 
+      if (!h.examId) {
+        return res.status(400).json({ error: 'Mã đề thi không hợp lệ.' });
+      }
+
+      const [exams] = await pool.query('SELECT class_id, questionIds FROM active_exams WHERE id = ?', [h.examId]);
+      const activeExamRows = exams as any[];
+      if (activeExamRows.length === 0) {
+        return res.status(404).json({ error: 'Đề thi không tồn tại hoặc đã bị xóa.' });
+      }
+      
+      const activeExam = activeExamRows[0];
+      if (activeExam.class_id && req.user.role === 'student' && activeExam.class_id !== req.user.class_id) {
+        return res.status(403).json({ error: 'Bạn không có quyền nộp bài cho đề thi của lớp khác.' });
+      }
+
+      let totalExamQuestions = 0;
+      try {
+         const parsedQIds = JSON.parse(activeExam.questionIds || '[]');
+         totalExamQuestions = Array.isArray(parsedQIds) ? parsedQIds.length : 0;
+      } catch (e) {
+         totalExamQuestions = Array.isArray(h.questionsDetail) ? h.questionsDetail.length : 0;
+      }
+      
+      if (totalExamQuestions === 0) {
+         totalExamQuestions = Array.isArray(h.questionsDetail) ? h.questionsDetail.length : 1;
+      }
+
       if (Array.isArray(h.questionsDetail) && h.questionsDetail.length > 0) {
         const [dbQuestions] = await pool.query('SELECT id, content, options, correctAnswer FROM questions');
         const qMapById = new Map((dbQuestions as any[]).map(q => [q.id, q]));
@@ -797,11 +909,11 @@ async function initializeDatabase() {
               isCorrect
             };
           }
-          if (item.isCorrect) correctCount++;
-          return item;
+          return { ...item, isCorrect: false };
         });
 
-        const finalScoreNum = (correctCount / verifiedDetails.length) * 10;
+        // Use totalExamQuestions instead of verifiedDetails.length to prevent submitting only 1 question to get 10/10
+        const finalScoreNum = (correctCount / totalExamQuestions) * 10;
         finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
         const pass = finalScoreNum >= 5;
         finalResultStr = pass ? 'Đạt' : 'Không đạt';
@@ -892,25 +1004,69 @@ async function initializeDatabase() {
   // --- AUTHENTICATION ENDPOINTS ---
 
 
+  const loginAttempts = new Map<string, { count: number, resetTime: number }>();
+
+  const loginRateLimiter = (req: any, res: any, next: any) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+    const now = Date.now();
+    const record = loginAttempts.get(ip);
+
+    if (record) {
+      if (now > record.resetTime) {
+        loginAttempts.set(ip, { count: 0, resetTime: now + 15 * 60 * 1000 });
+        return next();
+      }
+      if (record.count >= 5) {
+        return res.status(429).json({ error: 'Quá nhiều lần đăng nhập thất bại. Vui lòng thử lại sau 15 phút.' });
+      }
+    } else {
+      loginAttempts.set(ip, { count: 0, resetTime: now + 15 * 60 * 1000 });
+    }
+    next();
+  };
+
   // POST login
-  app.post('/api/auth/login', async (req, res) => {
+  app.post('/api/auth/login', loginRateLimiter, async (req: any, res) => {
+    const ip = req.ip || req.connection?.remoteAddress || 'unknown';
+
     try {
       const { email, password } = req.body;
       if (!email || !password) {
         return res.status(400).json({ error: 'Vui lòng cung cấp email và mật khẩu.' });
       }
 
-      const hashed = hashPassword(password, email);
       const [users] = await pool.query(
-        'SELECT name, role, studentId, status, class_id FROM users WHERE email = ? AND password = ?',
-        [email, hashed]
+        'SELECT name, role, studentId, status, class_id, password FROM users WHERE email = ?',
+        [email]
       );
 
       if ((users as any[]).length === 0) {
+        const record = loginAttempts.get(ip);
+        if (record) record.count++;
         return res.status(401).json({ error: 'Email hoặc mật khẩu không chính xác.' });
       }
 
       const user = (users as any[])[0];
+
+      let isValid = false;
+      if (user.password && user.password.startsWith('$2b$')) {
+        isValid = await bcrypt.compare(password, user.password);
+      } else {
+        const hashed = legacyHashPassword(password, email);
+        isValid = (hashed === user.password);
+        if (isValid) {
+          const newHash = await hashPasswordAsync(password);
+          await pool.query('UPDATE users SET password = ? WHERE email = ?', [newHash, email]);
+        }
+      }
+
+      if (!isValid) {
+        const record = loginAttempts.get(ip);
+        if (record) record.count++;
+        return res.status(401).json({ error: 'Email hoặc mật khẩu không chính xác.' });
+      }
+
+      loginAttempts.delete(ip);
 
       // Check if account is suspended
       if (user.status === 'Suspended') {
@@ -1006,7 +1162,7 @@ async function initializeDatabase() {
       }
 
       const finalPassword = password || `Edu@${crypto.randomBytes(4).toString('hex')}!`;
-      const hashed = hashPassword(finalPassword, email);
+      const hashed = await hashPasswordAsync(finalPassword);
       const createdAt = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
 
       const [result] = await pool.query(
@@ -1065,7 +1221,7 @@ async function initializeDatabase() {
 
       if (password) {
         query += ', password = ?';
-        params.push(hashPassword(password, email));
+        params.push(await hashPasswordAsync(password));
       }
 
       query += ' WHERE id = ?';
@@ -1383,8 +1539,9 @@ async function initializeDatabase() {
   app.delete('/api/classes/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
     try {
       const { id } = req.params;
-      // Set class_id to null for users in this class
+      // Set class_id to null for users and exams assigned to this class
       await pool.query('UPDATE users SET class_id = NULL WHERE class_id = ?', [id]);
+      await pool.query('UPDATE active_exams SET class_id = NULL WHERE class_id = ?', [id]);
       await pool.query('DELETE FROM classes WHERE id = ?', [id]);
       res.json({ message: 'Deleted class successfully.' });
     } catch (err: any) {

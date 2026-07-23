@@ -74,27 +74,20 @@ export default function App() {
     return () => window.removeEventListener('session-expired', handleSessionExpired);
   }, []);
 
+  const [isLoading, setIsLoading] = React.useState(false);
+
   // Fetch initial data from MySQL database via Express API
   React.useEffect(() => {
     if (!isLoggedIn) return; // Only fetch if logged in
 
-    // Fetch Questions
-    authFetch('/api/questions')
-      .then(handleResponse)
-      .then(data => setQuestions(data))
-      .catch(err => console.error('Error fetching questions:', err));
-
-    // Fetch Active Exams
-    authFetch('/api/exams')
-      .then(handleResponse)
-      .then(data => setActiveExams(data))
-      .catch(err => console.error('Error fetching exams:', err));
-
-    // Fetch History
-    authFetch('/api/history')
-      .then(handleResponse)
-      .then(data => setExamHistory(data))
-      .catch(err => console.error('Error fetching history:', err));
+    setIsLoading(true);
+    Promise.all([
+      authFetch('/api/questions').then(handleResponse).then(data => setQuestions(data)).catch(err => console.error('Error fetching questions:', err)),
+      authFetch('/api/exams').then(handleResponse).then(data => setActiveExams(data)).catch(err => console.error('Error fetching exams:', err)),
+      authFetch('/api/history').then(handleResponse).then(data => setExamHistory(data)).catch(err => console.error('Error fetching history:', err))
+    ]).finally(() => {
+      setIsLoading(false);
+    });
   }, [isLoggedIn]);
 
   const handleLogin = (userRole: Role, name: string, sid?: string, token?: string) => {
@@ -253,6 +246,16 @@ export default function App() {
   // Render Auth Splash Screen
   if (!isLoggedIn) {
     return <AuthScreen onLogin={handleLogin} />;
+  }
+
+  // Render Global Loading State
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] flex-col gap-4">
+        <div className="w-10 h-10 border-4 border-[#0058be] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-[#001a42] font-semibold text-sm animate-pulse">Đang đồng bộ dữ liệu hệ thống...</p>
+      </div>
+    );
   }
 
   // Main Dashboard Shell with Topbar and Sidebar layout

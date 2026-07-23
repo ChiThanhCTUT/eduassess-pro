@@ -111,6 +111,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
 
     const newHistoryItem: ExamHistory = {
       id: `HIST-${Math.floor(Math.random() * 90000) + 10000}`,
+      examId: exam.id,
       title: exam.title,
       department: `Khoa ${exam.subject}`,
       submitDate: dateStr,

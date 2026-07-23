@@ -14,6 +14,7 @@ export interface Question {
 
 export interface ExamHistory {
   id: string;
+  examId?: string;
   title: string;
   department: string;
   submitDate: string;
