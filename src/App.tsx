@@ -143,6 +143,7 @@ export default function App() {
       .then(handleResponse)
       .then(data => {
         setExamHistory(prev => [data, ...prev]);
+        setActiveExams(prev => prev.filter(e => e.id !== newHistoryItem.examId));
         setTakingExam(null);
         setCurrentTab('history');
       })

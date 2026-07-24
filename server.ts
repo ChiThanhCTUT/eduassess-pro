@@ -3,6 +3,7 @@ import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 import { initialQuestions, initialActiveExams, initialExamHistory } from './src/data';
 
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
@@ -1564,6 +1565,16 @@ async function initializeDatabase() {
     } catch (err: any) {
       res.status(500).json({ error: 'Không thể xóa lớp học.' });
     }
+  });
+
+  // Phục vụ các file tĩnh trong thư mục dist (React Build)
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  app.use(express.static(path.join(__dirname, 'dist')));
+
+  // Định tuyến mọi Request (không bắt đầu bằng /api) về file index.html của React
+  app.get(/^(?!\/api).+/, (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist/index.html'));
   });
 
   // Start the server
