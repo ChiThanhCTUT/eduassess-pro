@@ -7,6 +7,8 @@ import { initialQuestions, initialActiveExams, initialExamHistory } from './src/
 
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
 
+let pool: any;
+
 import bcrypt from 'bcrypt';
 
 function legacyHashPassword(password: string, email: string): string {
@@ -135,7 +137,7 @@ async function initializeDatabase() {
   }
 
   // 2. Create connection pool using the database
-  const pool = mysql.createPool({
+  pool = mysql.createPool({
     ...dbConfig,
     database: dbName,
     waitForConnections: true,
@@ -237,6 +239,9 @@ async function initializeDatabase() {
     } catch (e) {}
     try {
       await pool.query("ALTER TABLE exam_history ADD COLUMN userEmail VARCHAR(150) NOT NULL");
+    } catch (e) {}
+    try {
+      await pool.query("ALTER TABLE exam_history ADD COLUMN examId VARCHAR(50) DEFAULT NULL");
     } catch (e) {}
     try {
       await pool.query("CREATE INDEX idx_users_role ON users (role)");
@@ -691,10 +696,14 @@ async function initializeDatabase() {
       let query = 'SELECT e.*, c.class_name, c.class_code FROM active_exams e LEFT JOIN classes c ON e.class_id = c.id WHERE 1=1';
       const params: any[] = [];
 
-      // Students only see exams assigned to their class or exams with no class
-      if (req.user.role === 'student' && req.user.class_id) {
-        query += ' AND (e.class_id = ? OR e.class_id IS NULL)';
-        params.push(req.user.class_id);
+      // Students only see exams assigned to their class or exams with no class, AND exams they haven't submitted yet
+      if (req.user.role === 'student') {
+        if (req.user.class_id) {
+          query += ' AND (e.class_id = ? OR e.class_id IS NULL)';
+          params.push(req.user.class_id);
+        }
+        query += ' AND e.id NOT IN (SELECT examId FROM exam_history WHERE userEmail = ? AND examId IS NOT NULL)';
+        params.push(req.user.email);
       }
 
       if (search) {
@@ -865,6 +874,14 @@ async function initializeDatabase() {
         return res.status(400).json({ error: 'Mã đề thi không hợp lệ.' });
       }
 
+      // Prevent duplicate submissions
+      if (req.user.role === 'student') {
+        const [existing] = await pool.query('SELECT id FROM exam_history WHERE userEmail = ? AND examId = ?', [userEmail, h.examId]);
+        if ((existing as any[]).length > 0) {
+          return res.status(400).json({ error: 'Bạn đã hoàn thành bài thi này trước đó.' });
+        }
+      }
+
       const [exams] = await pool.query('SELECT class_id, questionIds FROM active_exams WHERE id = ?', [h.examId]);
       const activeExamRows = exams as any[];
       if (activeExamRows.length === 0) {
@@ -920,10 +937,10 @@ async function initializeDatabase() {
       }
 
       await pool.query(
-        'INSERT INTO exam_history (id, title, department, userEmail, submitDate, score, result, iconName, questionsDetail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [h.id, h.title, h.department, userEmail, h.submitDate, finalScoreStr, finalResultStr, h.iconName, JSON.stringify(verifiedDetails)]
+        'INSERT INTO exam_history (id, title, department, userEmail, submitDate, score, result, iconName, questionsDetail, examId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [h.id, h.title, h.department, userEmail, h.submitDate, finalScoreStr, finalResultStr, h.iconName, JSON.stringify(verifiedDetails), h.examId]
       );
-      res.status(201).json({ ...h, score: finalScoreStr, result: finalResultStr, questionsDetail: verifiedDetails, userEmail });
+      res.status(201).json({ ...h, score: finalScoreStr, result: finalResultStr, questionsDetail: verifiedDetails, userEmail, examId: h.examId });
     } catch (err: any) {
       res.status(500).json({ error: 'Không thể nộp kết quả thi.' });
     }
