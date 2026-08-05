@@ -25,14 +25,14 @@ function hashPasswordSync(password: string): string {
   return bcrypt.hashSync(password, 10);
 }
 
-function generateToken(user: { email: string; role: string; name: string; studentId: string; class_id?: number | null }): string {
+function generateToken(user: { email: string; role: string; name: string; studentId: string; class_id?: number | null }, expiresInMs: number = 30 * 60 * 1000): string {
   const payload = JSON.stringify({
     email: user.email,
     role: user.role,
     name: user.name,
     studentId: user.studentId,
     class_id: user.class_id || null,
-    exp: Date.now() + 7 * 24 * 60 * 60 * 1000 // 7 days
+    exp: Date.now() + expiresInMs // Default 30 minutes
   });
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
   return Buffer.from(payload).toString('base64') + '.' + signature;
@@ -291,6 +291,18 @@ async function initializeDatabase() {
         created_at VARCHAR(50),
         updated_at VARCHAR(50),
         FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Refresh Tokens Table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        token VARCHAR(128) UNIQUE NOT NULL,
+        email VARCHAR(100) NOT NULL,
+        expiresAt BIGINT NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (email) REFERENCES users(email) ON DELETE CASCADE
       )
     `);
 
@@ -1092,9 +1104,18 @@ async function initializeDatabase() {
       }
 
       const tokenUser = { email, role: user.role, name: user.name, studentId: user.studentId || '', class_id: user.class_id || null };
+      const refreshToken = crypto.randomBytes(64).toString('hex');
+      const refreshExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+
+      await pool.query(
+        'INSERT INTO refresh_tokens (token, email, expiresAt) VALUES (?, ?, ?)',
+        [refreshToken, email, refreshExpiresAt]
+      );
+
       res.json({
         message: 'Đăng nhập thành công.',
-        token: generateToken(tokenUser),
+        token: generateToken(tokenUser), // Defaults to 30 mins
+        refreshToken,
         user: {
           email,
           name: user.name,
@@ -1105,6 +1126,58 @@ async function initializeDatabase() {
       });
     } catch (err: any) {
       res.status(500).json({ error: 'Lỗi đăng nhập hệ thống.' });
+    }
+  });
+
+  // POST refresh token
+  app.post('/api/auth/refresh', async (req: any, res) => {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(401).json({ error: 'Không tìm thấy refresh token.' });
+      }
+
+      const [rows] = await pool.query('SELECT email, expiresAt FROM refresh_tokens WHERE token = ?', [refreshToken]);
+      if ((rows as any[]).length === 0) {
+        return res.status(403).json({ error: 'Refresh token không hợp lệ.' });
+      }
+
+      const tokenData = (rows as any[])[0];
+      if (Date.now() > tokenData.expiresAt) {
+        await pool.query('DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
+        return res.status(403).json({ error: 'Refresh token đã hết hạn.' });
+      }
+
+      // Lấy thông tin user hiện tại
+      const [userRows] = await pool.query('SELECT name, role, studentId, status, class_id FROM users WHERE email = ?', [tokenData.email]);
+      if ((userRows as any[]).length === 0) {
+        return res.status(403).json({ error: 'Người dùng không tồn tại.' });
+      }
+
+      const user = (userRows as any[])[0];
+      if (user.status === 'Suspended') {
+        return res.status(403).json({ error: 'Tài khoản đã bị khóa.' });
+      }
+
+      const tokenUser = { email: tokenData.email, role: user.role, name: user.name, studentId: user.studentId || '', class_id: user.class_id || null };
+      const newToken = generateToken(tokenUser); // Lại có 30 phút
+
+      res.json({ token: newToken });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Lỗi cấp mới token.' });
+    }
+  });
+
+  // POST logout
+  app.post('/api/auth/logout', async (req: any, res) => {
+    try {
+      const { refreshToken } = req.body;
+      if (refreshToken) {
+        await pool.query('DELETE FROM refresh_tokens WHERE token = ?', [refreshToken]);
+      }
+      res.json({ message: 'Đăng xuất thành công.' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Lỗi đăng xuất.' });
     }
   });
 

@@ -90,7 +90,7 @@ export default function App() {
     });
   }, [isLoggedIn]);
 
-  const handleLogin = (userRole: Role, name: string, sid?: string, token?: string) => {
+  const handleLogin = (userRole: Role, name: string, sid?: string, token?: string, refreshToken?: string) => {
     if (!token) {
       alert('Lỗi xác thực Token: Không thể đăng nhập vào hệ thống mà không có token hợp lệ.');
       return;
@@ -106,6 +106,9 @@ export default function App() {
     localStorage.setItem('userName', name);
     localStorage.setItem('studentId', sid || '');
     localStorage.setItem('userToken', token);
+    if (refreshToken) {
+      localStorage.setItem('refreshToken', refreshToken);
+    }
 
     // Route to first valid tab
     if (userRole === 'student') {
@@ -121,12 +124,23 @@ export default function App() {
     setIsLoggedIn(false);
     setTakingExam(null);
     
+    
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken })
+      }).catch(console.error);
+    }
+
     // Clear session in localStorage
     localStorage.removeItem('isLoggedIn');
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('studentId');
     localStorage.removeItem('userToken');
+    localStorage.removeItem('refreshToken');
   };
 
   // Exam workflow

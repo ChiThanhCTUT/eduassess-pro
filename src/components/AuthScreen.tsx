@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Role } from '../types';
 
 interface AuthScreenProps {
-  onLogin: (role: Role, userName: string, studentId?: string, token?: string) => void;
+  onLogin: (role: Role, userName: string, studentId?: string, token?: string, refreshToken?: string) => void;
 }
 
 export default function AuthScreen({ onLogin }: AuthScreenProps) {
@@ -38,7 +38,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
       })
       .then(data => {
         setLoading(false);
-        onLogin(data.user.role, data.user.name, data.user.studentId, data.token);
+        onLogin(data.user.role, data.user.name, data.user.studentId, data.token, data.refreshToken);
       })
       .catch(err => {
         setLoading(false);
