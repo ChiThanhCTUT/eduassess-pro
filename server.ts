@@ -219,7 +219,7 @@ pool = mysql.createPool({
 
       await pool.query(
         'UPDATE questions SET content = ?, subject = ?, difficulty = ?, options = ?, correctAnswer = ?, topic = ?, avgTime = ?, errorRate = ? WHERE id = ?',
-        [q.content, q.subject, q.difficulty, JSON.stringify(q.options), q.correctAnswer, q.topic, q.avgTime, q.errorRate, id]
+        [q.content, q.subject, q.difficulty, JSON.stringify(q.options), q.correctAnswer, q.topic, q.avgTime || '02:00', q.errorRate || 0, id]
       );
       res.json(q);
     } catch (err: any) {

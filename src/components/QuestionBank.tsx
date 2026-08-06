@@ -79,42 +79,46 @@ export default function QuestionBank({ questions, onAddQuestion, onEditQuestion,
     setFormOptions(updated);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formContent.trim()) {
       alert('Vui lòng nhập nội dung câu hỏi.');
       return;
     }
 
-    if (editingQuestion) {
-      // Edit mode
-      const updatedQuestion: Question = {
-        ...editingQuestion,
-        subject: formSubject,
-        difficulty: formDifficulty,
-        content: formContent,
-        options: formOptions,
-        correctAnswer: correctAnswerIndex,
-        topic: formTopic
-      };
-      onEditQuestion(updatedQuestion);
-    } else {
-      // Add mode
-      const randomId = `#Q-${Math.floor(10000 + Math.random() * 90000)}`;
-      const newQuestion: Question = {
-        id: randomId,
-        subject: formSubject,
-        difficulty: formDifficulty,
-        content: formContent,
-        options: formOptions,
-        correctAnswer: correctAnswerIndex,
-        topic: formTopic,
-        avgTime: '02:00',
-        errorRate: 35.0
-      };
-      onAddQuestion(newQuestion);
+    try {
+      if (editingQuestion) {
+        // Edit mode
+        const updatedQuestion: Question = {
+          ...editingQuestion,
+          subject: formSubject,
+          difficulty: formDifficulty,
+          content: formContent,
+          options: formOptions,
+          correctAnswer: correctAnswerIndex,
+          topic: formTopic
+        };
+        await onEditQuestion(updatedQuestion);
+      } else {
+        // Add mode
+        const randomId = `#Q-${Math.floor(10000 + Math.random() * 90000)}`;
+        const newQuestion: Question = {
+          id: randomId,
+          subject: formSubject,
+          difficulty: formDifficulty,
+          content: formContent,
+          options: formOptions,
+          correctAnswer: correctAnswerIndex,
+          topic: formTopic,
+          avgTime: '02:00',
+          errorRate: 35.0
+        };
+        await onAddQuestion(newQuestion);
+      }
+      setIsModalOpen(false);
+    } catch (err: any) {
+      alert(err.message || 'Có lỗi xảy ra khi lưu câu hỏi.');
     }
-    setIsModalOpen(false);
   };
 
   const handleDelete = (id: string) => {

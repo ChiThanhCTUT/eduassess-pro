@@ -190,7 +190,7 @@ export default function App() {
 
   // Admin Question Bank workflow
   const handleAddQuestion = (newQ: Question) => {
-    authFetch('/api/questions', {
+    return authFetch('/api/questions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newQ)
@@ -198,12 +198,16 @@ export default function App() {
       .then(handleResponse)
       .then(data => {
         setQuestions(prev => [data, ...prev]);
+        return data;
       })
-      .catch(err => console.error('Error adding question:', err));
+      .catch(err => {
+        console.error('Error adding question:', err);
+        throw err;
+      });
   };
 
   const handleEditQuestion = (updatedQ: Question) => {
-    authFetch(`/api/questions/${encodeURIComponent(updatedQ.id)}`, {
+    return authFetch(`/api/questions/${encodeURIComponent(updatedQ.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updatedQ)
@@ -211,8 +215,12 @@ export default function App() {
       .then(handleResponse)
       .then(data => {
         setQuestions(prev => prev.map(q => (q.id === data.id ? data : q)));
+        return data;
       })
-      .catch(err => console.error('Error editing question:', err));
+      .catch(err => {
+        console.error('Error editing question:', err);
+        throw err;
+      });
   };
 
   const handleDeleteQuestion = (id: string) => {
