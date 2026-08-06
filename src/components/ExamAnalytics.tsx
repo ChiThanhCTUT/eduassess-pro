@@ -8,13 +8,16 @@ interface ExamAnalyticsProps {
 
 export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps) {
   // Compute analytics dynamically from active exam history and questions database
-  const scores = history.map(h => {
-    const parts = h.score.split('/');
-    return parseFloat(parts[0]);
-  }).filter(s => !isNaN(s));
+  const scores = history
+    .map(h => {
+      const parts = h.score.split('/');
+      return parseFloat(parts[0]);
+    })
+    .filter(s => !isNaN(s));
 
-  const avg = scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '0.0';
-  
+  const avg =
+    scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '0.0';
+
   // Track dynamic attempts from history
   const qAttempts: Record<string, { total: number; wrong: number }> = {};
   history.forEach(h => {
@@ -34,13 +37,15 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
     if (attempts && attempts.total > 0) {
       return {
         ...q,
-        errorRate: Math.round((attempts.wrong / attempts.total) * 100)
+        errorRate: Math.round((attempts.wrong / attempts.total) * 100),
       };
     }
     return q;
   });
 
-  const sortedQuestions = [...questionsWithDynamicRate].sort((a, b) => (b.errorRate || 0) - (a.errorRate || 0));
+  const sortedQuestions = [...questionsWithDynamicRate].sort(
+    (a, b) => (b.errorRate || 0) - (a.errorRate || 0),
+  );
   const hardestQId = sortedQuestions.length > 0 ? sortedQuestions[0].id : 'N/A';
 
   const stats = {
@@ -48,7 +53,7 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
     completionRate: history.length > 0 ? '98.2%' : '0.0%',
     activeStudents: String(new Set(history.map(h => h.userEmail || h.userName || h.id)).size || 0),
     hardestQuestion: hardestQId,
-    avgTimeSpent: history.length > 0 ? '54 phút' : '0 phút'
+    avgTimeSpent: history.length > 0 ? '54 phút' : '0 phút',
   };
 
   const scoreDistribution = [
@@ -56,7 +61,7 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
     { label: '2 - 4 điểm', count: 0, percent: 0 },
     { label: '4 - 6 điểm', count: 0, percent: 0 },
     { label: '6 - 8 điểm', count: 0, percent: 0 },
-    { label: '8 - 10 điểm', count: 0, percent: 0 }
+    { label: '8 - 10 điểm', count: 0, percent: 0 },
   ];
 
   history.forEach(h => {
@@ -83,7 +88,7 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredHardest = hardestQuestions.filter(
-    q => q.content.toLowerCase().includes(searchTerm.toLowerCase()) || q.id.includes(searchTerm)
+    q => q.content.toLowerCase().includes(searchTerm.toLowerCase()) || q.id.includes(searchTerm),
   );
 
   return (
@@ -102,7 +107,9 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
         <div className="bg-white border border-[#c2c6d6] rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <span className="material-symbols-outlined text-[#0058be] text-2xl">grade</span>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">Điểm trung bình lớp</p>
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">
+              Điểm trung bình lớp
+            </p>
           </div>
           <div className="mt-4">
             <h3 className="text-3xl font-extrabold text-[#191c1d]">{stats.avgScore}</h3>
@@ -117,7 +124,9 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
         <div className="bg-white border border-[#c2c6d6] rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <span className="material-symbols-outlined text-green-600 text-2xl">task_alt</span>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">Tỷ lệ hoàn thành bài</p>
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">
+              Tỷ lệ hoàn thành bài
+            </p>
           </div>
           <div className="mt-4">
             <h3 className="text-3xl font-extrabold text-[#191c1d]">{stats.completionRate}</h3>
@@ -131,7 +140,9 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
         <div className="bg-white border border-[#c2c6d6] rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <span className="material-symbols-outlined text-amber-600 text-2xl">schedule</span>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">Thời gian trung bình</p>
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">
+              Thời gian trung bình
+            </p>
           </div>
           <div className="mt-4">
             <h3 className="text-3xl font-extrabold text-[#191c1d]">{stats.avgTimeSpent}</h3>
@@ -145,7 +156,9 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
         <div className="bg-white border border-[#c2c6d6] rounded-2xl p-6 shadow-sm flex flex-col justify-between">
           <div>
             <span className="material-symbols-outlined text-red-600 text-2xl">error_outline</span>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">Câu hỏi khó nhất</p>
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-3">
+              Câu hỏi khó nhất
+            </p>
           </div>
           <div className="mt-4">
             <h3 className="text-3xl font-extrabold text-[#ba1a1a]">{stats.hardestQuestion}</h3>
@@ -167,12 +180,15 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
           {/* Graphical Bar Chart */}
           <div className="h-64 flex items-end gap-6 pt-6 border-b border-gray-100 px-4">
             {scoreDistribution.map((bar, idx) => (
-              <div key={idx} className="flex-1 flex flex-col items-center gap-3 h-full justify-end group">
+              <div
+                key={idx}
+                className="flex-1 flex flex-col items-center gap-3 h-full justify-end group"
+              >
                 <div className="text-xs font-bold text-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
                   {bar.count} SV ({bar.percent}%)
                 </div>
                 {/* Visual Bar */}
-                <div 
+                <div
                   className="w-full bg-[#d6e0f3] group-hover:bg-[#0058be] rounded-t-lg transition-all duration-500 relative cursor-pointer"
                   style={{ height: `${bar.percent * 2}px` }}
                 >
@@ -191,7 +207,8 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
           <div>
             <h3 className="font-bold text-base text-[#191c1d] mb-4">Khuyến nghị của AI</h3>
             <p className="text-xs text-gray-500 leading-relaxed mb-6">
-              Hệ thống đã phân tích kết quả và đề xuất các giải pháp nâng cao hiệu suất dựa theo dữ liệu thực tế.
+              Hệ thống đã phân tích kết quả và đề xuất các giải pháp nâng cao hiệu suất dựa theo dữ
+              liệu thực tế.
             </p>
 
             <div className="space-y-4">
@@ -218,28 +235,41 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
                   }
                 });
 
-                const hardestQ = questions.reduce((prev, current) => {
-                  return ((prev.errorRate || 0) > (current.errorRate || 0)) ? prev : current;
-                }, questions[0] || { id: 'N/A', content: '', errorRate: 0 });
+                const hardestQ = questions.reduce(
+                  (prev, current) => {
+                    return (prev.errorRate || 0) > (current.errorRate || 0) ? prev : current;
+                  },
+                  questions[0] || { id: 'N/A', content: '', errorRate: 0 },
+                );
 
                 return (
                   <>
                     <div className="flex gap-3 items-start">
-                      <span className="material-symbols-outlined text-[#0058be] text-xl">school</span>
+                      <span className="material-symbols-outlined text-[#0058be] text-xl">
+                        school
+                      </span>
                       <div>
-                        <h4 className="text-xs font-bold text-[#191c1d]">Bổ túc chuyên đề "{hardestTopic}"</h4>
+                        <h4 className="text-xs font-bold text-[#191c1d]">
+                          Bổ túc chuyên đề "{hardestTopic}"
+                        </h4>
                         <p className="text-[11px] text-gray-500 leading-relaxed mt-1">
-                          Sinh viên đang gặp nhiều khó khăn nhất ở chủ đề này với tỷ lệ lỗi trung bình khoảng {maxAvgError.toFixed(0)}%. Nên tăng cường lý thuyết phần này.
+                          Sinh viên đang gặp nhiều khó khăn nhất ở chủ đề này với tỷ lệ lỗi trung
+                          bình khoảng {maxAvgError.toFixed(0)}%. Nên tăng cường lý thuyết phần này.
                         </p>
                       </div>
                     </div>
 
                     <div className="flex gap-3 items-start">
-                      <span className="material-symbols-outlined text-[#ba1a1a] text-xl">warning</span>
+                      <span className="material-symbols-outlined text-[#ba1a1a] text-xl">
+                        warning
+                      </span>
                       <div>
-                        <h4 className="text-xs font-bold text-[#191c1d]">Rà soát câu hỏi khó nhất ({hardestQ.id})</h4>
+                        <h4 className="text-xs font-bold text-[#191c1d]">
+                          Rà soát câu hỏi khó nhất ({hardestQ.id})
+                        </h4>
                         <p className="text-[11px] text-gray-500 leading-relaxed mt-1">
-                          Câu hỏi này có tỷ lệ sai lệch kỷ lục {hardestQ.errorRate}%. Hãy kiểm tra xem câu hỏi hoặc đáp án có vấn đề sai sót hay lỗi biên soạn không.
+                          Câu hỏi này có tỷ lệ sai lệch kỷ lục {hardestQ.errorRate}%. Hãy kiểm tra
+                          xem câu hỏi hoặc đáp án có vấn đề sai sót hay lỗi biên soạn không.
                         </p>
                       </div>
                     </div>
@@ -250,7 +280,7 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
           </div>
 
           <div className="mt-6 pt-4 border-t border-gray-100">
-            <button 
+            <button
               onClick={() => alert('Xuất báo cáo PDF chi tiết gửi ban đào tạo...')}
               className="w-full py-2.5 bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 transition-colors flex items-center justify-center gap-1.5"
             >
@@ -265,17 +295,23 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
       <section className="bg-white border border-[#c2c6d6] rounded-2xl overflow-hidden shadow-sm">
         <div className="p-6 border-b border-gray-100 flex flex-wrap items-center justify-between gap-4 bg-gray-50/50">
           <div>
-            <h3 className="font-bold text-base text-[#191c1d]">Danh sách câu hỏi có tỷ lệ sai lệch cao nhất</h3>
-            <p className="text-xs text-gray-500 mt-0.5">Top câu hỏi cần cải thiện phương pháp giảng dạy.</p>
+            <h3 className="font-bold text-base text-[#191c1d]">
+              Danh sách câu hỏi có tỷ lệ sai lệch cao nhất
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Top câu hỏi cần cải thiện phương pháp giảng dạy.
+            </p>
           </div>
           <div className="w-64 relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">search</span>
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg">
+              search
+            </span>
             <input
               type="text"
               className="w-full pl-9 pr-4 py-2 bg-white border border-[#c2c6d6] rounded-xl text-xs focus:ring-2 focus:ring-[#005ac2]/20 focus:border-[#005ac2] outline-none transition-all"
               placeholder="Lọc câu hỏi lỗi..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
         </div>
@@ -286,30 +322,47 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
               <tr className="bg-gray-50/80 border-b border-[#c2c6d6]">
                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Mã</th>
                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Chủ đề</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Nội dung câu hỏi</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Tỷ lệ sai sót</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Thời gian trung bình</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">
+                  Nội dung câu hỏi
+                </th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">
+                  Tỷ lệ sai sót
+                </th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase">
+                  Thời gian trung bình
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#c2c6d6]">
               {filteredHardest.length > 0 ? (
-                filteredHardest.map((q) => (
+                filteredHardest.map(q => (
                   <tr key={q.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4 text-xs font-mono font-bold text-gray-500">{q.id}</td>
-                    <td className="px-6 py-4 text-xs font-semibold text-[#0058be]">{q.topic || q.subject}</td>
-                    <td className="px-6 py-4 text-sm text-gray-800 max-w-sm truncate" title={q.content}>{q.content}</td>
+                    <td className="px-6 py-4 text-xs font-semibold text-[#0058be]">
+                      {q.topic || q.subject}
+                    </td>
+                    <td
+                      className="px-6 py-4 text-sm text-gray-800 max-w-sm truncate"
+                      title={q.content}
+                    >
+                      {q.content}
+                    </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-extrabold text-[#ba1a1a]">{q.errorRate}%</span>
+                        <span className="text-xs font-extrabold text-[#ba1a1a]">
+                          {q.errorRate}%
+                        </span>
                         <div className="h-1.5 w-16 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-red-600 rounded-full" 
+                          <div
+                            className="h-full bg-red-600 rounded-full"
                             style={{ width: `${q.errorRate}%` }}
                           ></div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-xs font-medium text-gray-500">{q.avgTime || '02:00'}</td>
+                    <td className="px-6 py-4 text-xs font-medium text-gray-500">
+                      {q.avgTime || '02:00'}
+                    </td>
                   </tr>
                 ))
               ) : (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ActiveExam, Question, ExamHistory } from '../types';
 
 interface ExamTakingProps {
@@ -20,9 +20,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
       examQuestions = [];
     }
   } else {
-    const filtered = questions.filter(
-      q => q.subject.toLowerCase() === exam.subject.toLowerCase()
-    );
+    const filtered = questions.filter(q => q.subject.toLowerCase() === exam.subject.toLowerCase());
     examQuestions = filtered.slice(0, exam.questionCount || 10);
   }
 
@@ -37,6 +35,74 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
   const [timeLeft, setTimeLeft] = useState(exam.duration * 60); // in seconds
   const [showToast, setShowToast] = useState(false);
 
+  const handleSubmit = useCallback(
+    (isAutoSubmitParam?: boolean | React.MouseEvent) => {
+      const isAutoSubmit = isAutoSubmitParam === true;
+      if (
+        !isAutoSubmit &&
+        !window.confirm(
+          'Bạn có chắc chắn muốn nộp bài? Kết quả của bạn sẽ được chấm điểm ngay lập tức.',
+        )
+      ) {
+        return;
+      }
+      if (isAutoSubmit) {
+        alert('Đã hết thời gian làm bài! Hệ thống tự động thu bài và chấm điểm.');
+      }
+
+      const currentAnswers = answersRef.current;
+      // Calculate grade
+      let correctCount = 0;
+      const detailsList = examQuestions.map((q, idx) => {
+        const userOptIdx = currentAnswers[idx];
+        const isCorrect =
+          userOptIdx !== undefined &&
+          q.correctAnswer !== undefined &&
+          userOptIdx === q.correctAnswer;
+        if (isCorrect) correctCount++;
+
+        return {
+          questionId: q.id,
+          selectedOptionIndex: userOptIdx,
+          questionNum: idx + 1,
+          questionText: q.content,
+          userAnswer:
+            userOptIdx !== undefined && q.options ? q.options[userOptIdx] : 'Không trả lời',
+          correctAnswer:
+            q.options && q.correctAnswer !== undefined
+              ? q.options[q.correctAnswer]
+              : 'Chưa cập nhật',
+          isCorrect,
+        };
+      });
+
+      const finalScoreNum = (correctCount / examQuestions.length) * 10;
+      const finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
+      const pass = finalScoreNum >= 5;
+
+      const dateStr = new Date().toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+
+      const newHistoryItem: ExamHistory = {
+        id: `HIST-${Math.floor(Math.random() * 90000) + 10000}`,
+        examId: exam.id,
+        title: exam.title,
+        department: `Khoa ${exam.subject}`,
+        submitDate: dateStr,
+        score: finalScoreStr,
+        result: pass ? 'Đạt' : 'Không đạt',
+        iconName: exam.iconName,
+        questionsDetail: detailsList,
+      };
+
+      onFinishExam(newHistoryItem);
+    },
+    [exam, examQuestions, onFinishExam],
+  );
+
   // Active countdown timer
   useEffect(() => {
     const interval = setInterval(() => {
@@ -50,7 +116,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [handleSubmit]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -71,59 +137,6 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
     setFlagged(prev => ({ ...prev, [currentIndex]: !prev[currentIndex] }));
   };
 
-  const handleSubmit = (isAutoSubmitParam?: boolean | React.MouseEvent) => {
-    const isAutoSubmit = isAutoSubmitParam === true;
-    if (!isAutoSubmit && !window.confirm('Bạn có chắc chắn muốn nộp bài? Kết quả của bạn sẽ được chấm điểm ngay lập tức.')) {
-      return;
-    }
-    if (isAutoSubmit) {
-      alert('Đã hết thời gian làm bài! Hệ thống tự động thu bài và chấm điểm.');
-    }
-
-    const currentAnswers = answersRef.current;
-    // Calculate grade
-    let correctCount = 0;
-    const detailsList = examQuestions.map((q, idx) => {
-      const userOptIdx = currentAnswers[idx];
-      const isCorrect = userOptIdx !== undefined && q.correctAnswer !== undefined && userOptIdx === q.correctAnswer;
-      if (isCorrect) correctCount++;
-
-      return {
-        questionId: q.id,
-        selectedOptionIndex: userOptIdx,
-        questionNum: idx + 1,
-        questionText: q.content,
-        userAnswer: userOptIdx !== undefined && q.options ? q.options[userOptIdx] : 'Không trả lời',
-        correctAnswer: q.options && q.correctAnswer !== undefined ? q.options[q.correctAnswer] : 'Chưa cập nhật',
-        isCorrect
-      };
-    });
-
-    const finalScoreNum = (correctCount / examQuestions.length) * 10;
-    const finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
-    const pass = finalScoreNum >= 5;
-
-    const dateStr = new Date().toLocaleDateString('vi-VN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-
-    const newHistoryItem: ExamHistory = {
-      id: `HIST-${Math.floor(Math.random() * 90000) + 10000}`,
-      examId: exam.id,
-      title: exam.title,
-      department: `Khoa ${exam.subject}`,
-      submitDate: dateStr,
-      score: finalScoreStr,
-      result: pass ? 'Đạt' : 'Không đạt',
-      iconName: exam.iconName,
-      questionsDetail: detailsList
-    };
-
-    onFinishExam(newHistoryItem);
-  };
-
   return (
     <div className="min-h-screen bg-[#f8f9fa] text-[#191c1d]">
       {/* Top Header */}
@@ -139,9 +152,13 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
             <span className="font-medium">Đang tự động lưu...</span>
           </div>
 
-          <div className={`flex items-center gap-3 px-6 py-1.5 rounded-lg font-bold text-sm ${
-            timeLeft < 300 ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse' : 'bg-[#d8e2ff] text-[#001a42]'
-          }`}>
+          <div
+            className={`flex items-center gap-3 px-6 py-1.5 rounded-lg font-bold text-sm ${
+              timeLeft < 300
+                ? 'bg-red-50 text-red-700 border border-red-200 animate-pulse'
+                : 'bg-[#d8e2ff] text-[#001a42]'
+            }`}
+          >
             <span className="material-symbols-outlined text-base">timer</span>
             <span className="font-mono text-base tabular-nums">{formatTime(timeLeft)}</span>
           </div>
@@ -188,7 +205,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
             </div>
 
             {/* MCQ Options Radio Buttons */}
-            <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            <form className="space-y-4" onSubmit={e => e.preventDefault()}>
               {currentQuestion.options?.map((option, idx) => {
                 const labelLetter = String.fromCharCode(65 + idx); // A, B, C, D
                 const isChecked = answers[currentIndex] === idx;
@@ -204,9 +221,11 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
                           : 'border-gray-200 hover:border-[#0058be] hover:bg-gray-50'
                       }`}
                     >
-                      <span className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-sm mr-4 transition-colors ${
-                        isChecked ? 'bg-[#0058be] text-white' : 'bg-gray-100 text-[#191c1d]'
-                      }`}>
+                      <span
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg font-bold text-sm mr-4 transition-colors ${
+                          isChecked ? 'bg-[#0058be] text-white' : 'bg-gray-100 text-[#191c1d]'
+                        }`}
+                      >
                         {labelLetter}
                       </span>
                       <span className="text-sm font-semibold text-[#191c1d]">{option}</span>
@@ -326,9 +345,11 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
       </footer>
 
       {/* Auto-save success toast */}
-      <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-6 py-3 rounded-full shadow-xl transition-all duration-300 pointer-events-none z-50 ${
-        showToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-2'
-      }`}>
+      <div
+        className={`fixed bottom-24 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-6 py-3 rounded-full shadow-xl transition-all duration-300 pointer-events-none z-50 ${
+          showToast ? 'opacity-100 transform translate-y-0' : 'opacity-0 transform translate-y-2'
+        }`}
+      >
         Lựa chọn của bạn đã được tự động lưu thành công.
       </div>
     </div>

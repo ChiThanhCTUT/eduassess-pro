@@ -77,3 +77,25 @@ export interface ClassItem {
   created_at?: string;
   updated_at?: string;
 }
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: 'student' | 'teacher' | 'admin';
+  department: string;
+  status: 'Active' | 'Suspended';
+  createdAt: string;
+  class_id?: number | null;
+  class_name?: string;
+}
+
+export interface UserFormData {
+  name: string;
+  email: string;
+  password?: string;
+  role: 'student' | 'teacher' | 'admin';
+  department: string;
+  status: 'Active' | 'Suspended';
+  class_id: number | null;
+}

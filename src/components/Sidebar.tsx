@@ -19,10 +19,18 @@ export default function Sidebar({ currentTab, setCurrentTab, role, onLogout }: S
         </div>
         <div>
           <div className="font-semibold text-[#191c1d] text-sm leading-tight">
-            {role === 'student' ? 'Kiểm soát học tập' : role === 'teacher' ? 'Kiểm soát kỳ thi' : 'Hệ thống Quản trị'}
+            {role === 'student'
+              ? 'Kiểm soát học tập'
+              : role === 'teacher'
+                ? 'Kiểm soát kỳ thi'
+                : 'Hệ thống Quản trị'}
           </div>
           <div className="text-xs text-[#424754]">
-            {role === 'student' ? 'Cổng học viên' : role === 'teacher' ? 'Cổng giảng viên' : 'Bảng quản trị viên'}
+            {role === 'student'
+              ? 'Cổng học viên'
+              : role === 'teacher'
+                ? 'Cổng giảng viên'
+                : 'Bảng quản trị viên'}
           </div>
         </div>
       </div>
@@ -157,9 +165,11 @@ export default function Sidebar({ currentTab, setCurrentTab, role, onLogout }: S
       <div className="mt-auto space-y-1 border-t border-[#c2c6d6] pt-4">
         <a
           href="#help"
-          onClick={(e) => {
+          onClick={e => {
             e.preventDefault();
-            alert('Hệ thống hỗ trợ EduAssess Pro: Vui lòng liên hệ quản trị viên qua email support@eduassess.edu.vn.');
+            alert(
+              'Hệ thống hỗ trợ EduAssess Pro: Vui lòng liên hệ quản trị viên qua email support@eduassess.edu.vn.',
+            );
           }}
           className="flex items-center gap-3 px-3 py-2.5 text-[#424754] hover:bg-[#e7e8e9] transition-all duration-200 rounded-lg"
         >

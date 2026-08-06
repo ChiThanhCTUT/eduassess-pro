@@ -21,7 +21,7 @@ export default function AdminClasses() {
     department_id: '',
     class_code: '',
     class_name: '',
-    course_year: new Date().getFullYear().toString()
+    course_year: new Date().getFullYear().toString(),
   });
 
   const fetchClasses = () => {
@@ -63,7 +63,7 @@ export default function AdminClasses() {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -72,7 +72,7 @@ export default function AdminClasses() {
       department_id: departments.length > 0 ? departments[0].id : '',
       class_code: '',
       class_name: '',
-      course_year: new Date().getFullYear().toString()
+      course_year: new Date().getFullYear().toString(),
     });
     setEditingClass(null);
     setShowAddModal(true);
@@ -83,7 +83,7 @@ export default function AdminClasses() {
       department_id: cls.department_id || '',
       class_code: cls.class_code || '',
       class_name: cls.class_name || '',
-      course_year: cls.course_year || ''
+      course_year: cls.course_year || '',
     });
     setEditingClass(cls);
     setShowAddModal(true);
@@ -98,14 +98,14 @@ export default function AdminClasses() {
       authFetch(`/api/classes/${editingClass.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(formData),
       })
         .then(res => {
           if (!res.ok) throw new Error('Không thể cập nhật lớp học.');
           return res.json();
         })
         .then(data => {
-          setClasses(prev => prev.map(c => c.id === editingClass.id ? { ...c, ...data } : c));
+          setClasses(prev => prev.map(c => (c.id === editingClass.id ? { ...c, ...data } : c)));
           setShowAddModal(false);
           setEditingClass(null);
           setLoading(false);
@@ -120,7 +120,7 @@ export default function AdminClasses() {
     authFetch('/api/classes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
+      body: JSON.stringify(formData),
     })
       .then(res => {
         if (!res.ok) throw new Error('Không thể tạo lớp học mới.');
@@ -142,7 +142,7 @@ export default function AdminClasses() {
       setLoading(true);
       setError(null);
       authFetch(`/api/classes/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
       })
         .then(res => {
           if (!res.ok) throw new Error('Không thể xóa lớp học.');
@@ -174,7 +174,10 @@ export default function AdminClasses() {
   return (
     <div className="space-y-8 animate-fade-in" id="admin-classes-root">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4" id="admin-classes-header">
+      <div
+        className="flex flex-col md:flex-row md:items-center justify-between gap-4"
+        id="admin-classes-header"
+      >
         <div>
           <h1 className="text-3xl font-bold text-[#191c1d]">Quản lý lớp học</h1>
           <p className="text-sm text-gray-500 mt-1">
@@ -230,21 +233,29 @@ export default function AdminClasses() {
       </div>
 
       {/* Search Bar */}
-      <div className="bg-white border border-[#c2c6d6] rounded-2xl p-4 shadow-sm flex items-center gap-4" id="admin-classes-search">
+      <div
+        className="bg-white border border-[#c2c6d6] rounded-2xl p-4 shadow-sm flex items-center gap-4"
+        id="admin-classes-search"
+      >
         <div className="relative flex-1 w-full">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+            search
+          </span>
           <input
             type="text"
             className="w-full pl-10 pr-4 py-2 bg-[#f3f4f5] border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#0058be] outline-none text-xs"
             placeholder="Tìm kiếm theo tên lớp, mã lớp, hoặc khoa..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={e => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
 
       {/* Classes Table */}
-      <div className="bg-white border border-[#c2c6d6] rounded-2xl shadow-sm overflow-hidden" id="admin-classes-table-container">
+      <div
+        className="bg-white border border-[#c2c6d6] rounded-2xl shadow-sm overflow-hidden"
+        id="admin-classes-table-container"
+      >
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -260,8 +271,12 @@ export default function AdminClasses() {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredClasses.length > 0 ? (
-                filteredClasses.map((cls) => (
-                  <tr key={cls.id} className="hover:bg-gray-50/40 transition-colors text-xs" id={`row-class-${cls.id}`}>
+                filteredClasses.map(cls => (
+                  <tr
+                    key={cls.id}
+                    className="hover:bg-gray-50/40 transition-colors text-xs"
+                    id={`row-class-${cls.id}`}
+                  >
                     <td className="py-4 px-6 font-mono text-gray-500 font-semibold">{cls.id}</td>
                     <td className="py-4 px-6">
                       <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
@@ -271,11 +286,15 @@ export default function AdminClasses() {
                     <td className="py-4 px-6">
                       <p className="font-bold text-sm text-[#191c1d]">{cls.class_name}</p>
                     </td>
-                    <td className="py-4 px-6 text-gray-600 font-semibold">{cls.department_name || '—'}</td>
+                    <td className="py-4 px-6 text-gray-600 font-semibold">
+                      {cls.department_name || '—'}
+                    </td>
                     <td className="py-4 px-6 text-gray-500">{cls.course_year}</td>
                     <td className="py-4 px-6">
                       <div className="flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-gray-400 text-sm">group</span>
+                        <span className="material-symbols-outlined text-gray-400 text-sm">
+                          group
+                        </span>
                         <span className="font-bold text-[#191c1d]">{cls.student_count ?? 0}</span>
                       </div>
                     </td>
@@ -314,16 +333,29 @@ export default function AdminClasses() {
 
       {/* Add Class Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" id="modal-class-form">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowAddModal(false)}></div>
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+          id="modal-class-form"
+        >
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowAddModal(false)}
+          ></div>
           <div className="relative bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-[#0058be] text-2xl">{editingClass ? 'edit' : 'add'}</span>
-                <h2 className="text-lg font-bold text-[#191c1d]">{editingClass ? 'Cập nhật thông tin Lớp học' : 'Thêm lớp học mới'}</h2>
+                <span className="material-symbols-outlined text-[#0058be] text-2xl">
+                  {editingClass ? 'edit' : 'add'}
+                </span>
+                <h2 className="text-lg font-bold text-[#191c1d]">
+                  {editingClass ? 'Cập nhật thông tin Lớp học' : 'Thêm lớp học mới'}
+                </h2>
               </div>
               <button
-                onClick={() => { setShowAddModal(false); setEditingClass(null); }}
+                onClick={() => {
+                  setShowAddModal(false);
+                  setEditingClass(null);
+                }}
                 className="p-2 hover:bg-gray-100 rounded-full cursor-pointer transition-colors"
                 id="btn-close-class-modal"
               >
@@ -343,7 +375,9 @@ export default function AdminClasses() {
                 >
                   <option value="">-- Chọn khoa --</option>
                   {departments.map(d => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -392,7 +426,10 @@ export default function AdminClasses() {
               <div className="pt-4 border-t border-gray-100 flex justify-end gap-3">
                 <button
                   type="button"
-                  onClick={() => { setShowAddModal(false); setEditingClass(null); }}
+                  onClick={() => {
+                    setShowAddModal(false);
+                    setEditingClass(null);
+                  }}
                   className="px-4 py-2 border border-[#c2c6d6] text-gray-700 font-bold text-xs rounded-xl hover:bg-gray-50 transition-colors"
                 >
                   Hủy bỏ

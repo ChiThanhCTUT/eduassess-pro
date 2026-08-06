@@ -52,7 +52,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
   const [hardPercent, setHardPercent] = useState(20);
 
   const [description, setDescription] = useState(
-    'Kỳ thi đánh giá năng lực nâng cao cho sinh viên kỹ thuật về giải thuật ma trận, không gian Euclid.'
+    'Kỳ thi đánh giá năng lực nâng cao cho sinh viên kỹ thuật về giải thuật ma trận, không gian Euclid.',
   );
 
   const totalPercent = easyPercent + mediumPercent + hardPercent;
@@ -71,7 +71,9 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
     }
 
     if (totalPercent !== 100) {
-      alert(`Tổng tỷ lệ phần trăm phân bổ độ khó phải bằng 100%. Hiện tại đang là ${totalPercent}%.`);
+      alert(
+        `Tổng tỷ lệ phần trăm phân bổ độ khó phải bằng 100%. Hiện tại đang là ${totalPercent}%.`,
+      );
       return;
     }
 
@@ -81,7 +83,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
       'Vật lý lượng tử': 'biotech',
       'Sinh học': 'biotech',
       'Vật lý': 'biotech',
-      'Khoa học máy tính': 'code'
+      'Khoa học máy tính': 'code',
     };
 
     const newExam: ActiveExam = {
@@ -97,8 +99,8 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
       difficultyDistribution: {
         easy: easyPercent,
         medium: mediumPercent,
-        hard: hardPercent
-      }
+        hard: hardPercent,
+      },
     };
 
     try {
@@ -115,7 +117,9 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-[#191c1d]">Tạo đề thi mới</h1>
-        <p className="text-sm text-gray-500 mt-1">Cấu hình đề thi tự động từ kho dữ liệu câu hỏi thông minh.</p>
+        <p className="text-sm text-gray-500 mt-1">
+          Cấu hình đề thi tự động từ kho dữ liệu câu hỏi thông minh.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -123,78 +127,94 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
         <div className="lg:col-span-2 bg-white border border-[#c2c6d6] rounded-2xl p-6 shadow-sm">
           <form onSubmit={handleCreate} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Tiêu đề đề thi</label>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                Tiêu đề đề thi
+              </label>
               <input
                 type="text"
                 className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#c2c6d6] rounded-xl outline-none focus:ring-2 focus:ring-[#0058be] text-sm font-semibold"
                 placeholder="Ví dụ: Kiểm tra giữa học kỳ Giải tích"
                 value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
+                onChange={e => setExamTitle(e.target.value)}
                 required
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Môn học chủ trì</label>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                  Môn học chủ trì
+                </label>
                 <select
                   className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#c2c6d6] rounded-xl outline-none focus:ring-2 focus:ring-[#0058be] text-sm"
                   value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
+                  onChange={e => setSubject(e.target.value)}
                 >
                   {subjects.map(s => (
-                    <option key={s.code} value={s.name}>{s.name}</option>
+                    <option key={s.code} value={s.name}>
+                      {s.name}
+                    </option>
                   ))}
                 </select>
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Phân mục học thuật</label>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                  Phân mục học thuật
+                </label>
                 <input
                   type="text"
                   className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#c2c6d6] rounded-xl outline-none focus:ring-2 focus:ring-[#0058be] text-sm"
                   placeholder="Ví dụ: ĐẠI SỐ TUYẾN TÍNH"
                   value={category}
-                  onChange={(e) => setCategory(e.target.value)}
+                  onChange={e => setCategory(e.target.value)}
                   required
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Lớp học áp dụng</label>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                Lớp học áp dụng
+              </label>
               <select
                 className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#c2c6d6] rounded-xl outline-none focus:ring-2 focus:ring-[#0058be] text-sm"
                 value={selectedClassId ?? ''}
-                onChange={(e) => setSelectedClassId(e.target.value ? Number(e.target.value) : null)}
+                onChange={e => setSelectedClassId(e.target.value ? Number(e.target.value) : null)}
               >
                 <option value="">-- Tất cả lớp (không giới hạn) --</option>
                 {classes.map(c => (
-                  <option key={c.id} value={c.id}>{c.class_name} ({c.class_code})</option>
+                  <option key={c.id} value={c.id}>
+                    {c.class_name} ({c.class_code})
+                  </option>
                 ))}
               </select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Thời gian làm bài (Phút)</label>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                  Thời gian làm bài (Phút)
+                </label>
                 <input
                   type="number"
                   className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#c2c6d6] rounded-xl outline-none focus:ring-2 focus:ring-[#0058be] text-sm"
                   value={duration}
-                  onChange={(e) => setDuration(Number(e.target.value))}
+                  onChange={e => setDuration(Number(e.target.value))}
                   min={1}
                   required
                 />
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Tổng số lượng câu hỏi</label>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                  Tổng số lượng câu hỏi
+                </label>
                 <input
                   type="number"
                   className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#c2c6d6] rounded-xl outline-none focus:ring-2 focus:ring-[#0058be] text-sm"
                   value={questionCount}
-                  onChange={(e) => setQuestionCount(Number(e.target.value))}
+                  onChange={e => setQuestionCount(Number(e.target.value))}
                   min={1}
                   required
                 />
@@ -202,13 +222,15 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
             </div>
 
             <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">Mô tả tóm tắt kỳ thi</label>
+              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider block">
+                Mô tả tóm tắt kỳ thi
+              </label>
               <textarea
                 className="w-full px-4 py-3 bg-[#f8f9fa] border border-[#c2c6d6] rounded-xl outline-none focus:ring-2 focus:ring-[#0058be] text-sm resize-none"
                 placeholder="Mô tả tóm tắt về đề thi để thí sinh dễ dàng ôn tập và chuẩn bị tâm lý..."
                 rows={3}
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={e => setDescription(e.target.value)}
               />
             </div>
 
@@ -218,9 +240,13 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                   Cấu hình Tỷ lệ phân bổ độ khó (%)
                 </label>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                  totalPercent === 100 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700 animate-bounce'
-                }`}>
+                <span
+                  className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                    totalPercent === 100
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-red-100 text-red-700 animate-bounce'
+                  }`}
+                >
                   Tổng: {totalPercent}% / 100%
                 </span>
               </div>
@@ -238,7 +264,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
                     max="100"
                     className="w-full accent-[#0058be] h-1.5 bg-gray-100 rounded-lg cursor-pointer"
                     value={easyPercent}
-                    onChange={(e) => setEasyPercent(Number(e.target.value))}
+                    onChange={e => setEasyPercent(Number(e.target.value))}
                   />
                 </div>
 
@@ -254,7 +280,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
                     max="100"
                     className="w-full accent-[#0058be] h-1.5 bg-gray-100 rounded-lg cursor-pointer"
                     value={mediumPercent}
-                    onChange={(e) => setMediumPercent(Number(e.target.value))}
+                    onChange={e => setMediumPercent(Number(e.target.value))}
                   />
                 </div>
 
@@ -270,7 +296,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
                     max="100"
                     className="w-full accent-[#0058be] h-1.5 bg-gray-100 rounded-lg cursor-pointer"
                     value={hardPercent}
-                    onChange={(e) => setHardPercent(Number(e.target.value))}
+                    onChange={e => setHardPercent(Number(e.target.value))}
                   />
                 </div>
               </div>
@@ -300,7 +326,8 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
           <div>
             <h3 className="font-bold text-base text-[#191c1d] mb-4">Xem trước thống kê đề thi</h3>
             <p className="text-xs text-gray-500 leading-relaxed mb-6">
-              Hệ thống sẽ tự động quét và lựa chọn ngẫu nhiên các câu hỏi từ ngân hàng dựa trên cấu hình phân bổ bên cạnh.
+              Hệ thống sẽ tự động quét và lựa chọn ngẫu nhiên các câu hỏi từ ngân hàng dựa trên cấu
+              hình phân bổ bên cạnh.
             </p>
 
             {/* Structure analysis */}
@@ -308,7 +335,9 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
                 <div>
                   <p className="text-xs font-bold text-[#191c1d]">Số câu hỏi Dễ</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">Thời gian đề xuất: 1 phút / câu</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Thời gian đề xuất: 1 phút / câu
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="font-extrabold text-[#0058be] text-base">{easyCount} câu</p>
@@ -319,7 +348,9 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
                 <div>
                   <p className="text-xs font-bold text-[#191c1d]">Số câu hỏi Trung bình</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">Thời gian đề xuất: 2.5 phút / câu</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Thời gian đề xuất: 2.5 phút / câu
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="font-extrabold text-[#0058be] text-base">{mediumCount} câu</p>
@@ -330,7 +361,9 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
                 <div>
                   <p className="text-xs font-bold text-[#191c1d]">Số câu hỏi Khó</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">Thời gian đề xuất: 4.5 phút / câu</p>
+                  <p className="text-[10px] text-gray-500 mt-0.5">
+                    Thời gian đề xuất: 4.5 phút / câu
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="font-extrabold text-[#0058be] text-base">{hardCount} câu</p>

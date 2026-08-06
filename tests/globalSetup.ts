@@ -1,4 +1,4 @@
-import { initializeDatabase } from '../server.js';
+import { initializeDatabase } from '../scripts/init-db';
 
 export default async function setup() {
   console.log('Running Global Setup: Initializing Database...');
