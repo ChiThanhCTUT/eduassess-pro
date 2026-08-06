@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
-import { app, initializeDatabase } from '../server.js';
+import { app } from '../server.js';
+import { initializeDatabase } from '../scripts/init-db.ts';
 
 describe('Authentication API (SQA Test Suite)', () => {
   beforeAll(async () => {

@@ -13,7 +13,8 @@
     "lint": "tsc --noEmit",
     "start": "npx tsx server.ts",
     "test": "vitest run --fileParallelism=false",
-    "coverage": "vitest run --coverage --fileParallelism=false"
+    "coverage": "vitest run --coverage --fileParallelism=false",
+    "db:init": "npx tsx scripts/init-db.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
