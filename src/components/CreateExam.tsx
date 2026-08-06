@@ -46,7 +46,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
       .catch(err => console.error('Error fetching classes:', err));
   }, []);
 
-  // Sliders for difficulty
+  // Các thanh trượt cho tỷ lệ độ khó
   const [easyPercent, setEasyPercent] = useState(40);
   const [mediumPercent, setMediumPercent] = useState(40);
   const [hardPercent, setHardPercent] = useState(20);
@@ -57,7 +57,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
 
   const totalPercent = easyPercent + mediumPercent + hardPercent;
 
-  // Real-time calculation of question count per tier
+  // Tính toán thời gian thực số lượng câu hỏi theo độ khó
   const easyCount = Math.round((questionCount * easyPercent) / 100);
   const mediumCount = Math.round((questionCount * mediumPercent) / 100);
   const hardCount = questionCount - easyCount - mediumCount;
@@ -105,7 +105,7 @@ export default function CreateExam({ onCreateExam }: CreateExamProps) {
 
     try {
       const result = await onCreateExam(newExam);
-      if (result === false) return; // backend error handled in App.tsx
+      if (result === false) return; // lỗi backend được xử lý trong App.tsx
       alert(`Đề thi "${examTitle}" đã được tạo thành công và xuất bản đến thí sinh!`);
     } catch (err: any) {
       alert(`Lỗi tạo đề thi: ${err.message || 'Không thể tạo đề thi.'}`);

@@ -27,11 +27,11 @@ export function useQuestionBank({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Modal State
+  // Trạng thái Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
 
-  // Form Fields
+  // Các trường của Form
   const [formSubject, setFormSubject] = useState('');
   const [formDifficulty, setFormDifficulty] = useState<'Dễ' | 'Trung bình' | 'Khó'>('Trung bình');
   const [formContent, setFormContent] = useState('');
@@ -93,7 +93,7 @@ export function useQuestionBank({
 
     try {
       if (editingQuestion) {
-        // Edit mode
+        // Chế độ chỉnh sửa
         const updatedQuestion: Question = {
           ...editingQuestion,
           subject: formSubject,
@@ -105,7 +105,7 @@ export function useQuestionBank({
         };
         await onEditQuestion(updatedQuestion);
       } else {
-        // Add mode
+        // Chế độ thêm mới
         const randomId = `#Q-${Math.floor(10000 + Math.random() * 90000)}`;
         const newQuestion: Question = {
           id: randomId,
@@ -132,7 +132,7 @@ export function useQuestionBank({
     }
   };
 
-  // Filtering Logic
+  // Xử lý Lọc dữ liệu
   const filteredQuestions = questions.filter(q => {
     const matchSearch =
       q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||

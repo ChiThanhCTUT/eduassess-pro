@@ -16,7 +16,7 @@ export default function AdminClasses() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingClass, setEditingClass] = useState<ClassItem | null>(null);
 
-  // Form states
+  // Trạng thái Form
   const [formData, setFormData] = useState({
     department_id: '',
     class_code: '',
@@ -156,7 +156,7 @@ export default function AdminClasses() {
     }
   };
 
-  // Filtered classes
+  // Lọc danh sách lớp học
   const filteredClasses = classes.filter(cls => {
     const q = searchQuery.toLowerCase();
     return (
@@ -166,7 +166,7 @@ export default function AdminClasses() {
     );
   });
 
-  // Quick stats
+  // Thống kê nhanh
   const totalClasses = classes.length;
   const totalStudents = classes.reduce((sum, c) => sum + (c.student_count || 0), 0);
   const uniqueDepts = new Set(classes.map(c => c.department_id)).size;

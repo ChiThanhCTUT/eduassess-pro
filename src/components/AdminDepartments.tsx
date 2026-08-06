@@ -21,21 +21,21 @@ export default function AdminDepartments() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showDeptModal, setShowDeptModal] = useState(false);
-  const [showSubjectModal, setShowSubjectModal] = useState<string | null>(null); // holds department id
+  const [showSubjectModal, setShowSubjectModal] = useState<string | null>(null); // lưu ID của khoa
   const [editingDept, setEditingDept] = useState<Department | null>(null);
   const [editingSubject, setEditingSubject] = useState<{
     deptId: string;
     subject: SubjectItem;
   } | null>(null);
 
-  // Dept Form state
+  // Trạng thái form Khoa
   const [deptForm, setDeptForm] = useState({
     name: '',
     head: '',
     teacherCount: 5,
   });
 
-  // Subject Form state
+  // Trạng thái form Môn học
   const [subForm, setSubForm] = useState({
     code: '',
     name: '',

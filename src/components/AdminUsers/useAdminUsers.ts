@@ -10,11 +10,11 @@ export function useAdminUsers() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  // Modal states
+  // Trạng thái Modal
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
 
-  // Form states
+  // Trạng thái Form
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -25,7 +25,7 @@ export function useAdminUsers() {
     class_id: null as number | null,
   });
 
-  // Classes for dropdown
+  // Danh sách lớp học cho dropdown
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const currentUserRole = localStorage.getItem('userRole') || 'admin';
 
@@ -61,7 +61,7 @@ export function useAdminUsers() {
       .catch(() => {});
   }, []);
 
-  // Handle Input Changes
+  // Xử lý thay đổi Input
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
@@ -70,7 +70,7 @@ export function useAdminUsers() {
     }));
   };
 
-  // Open modal for add
+  // Mở modal để thêm mới
   const openAddModal = () => {
     setFormData({
       name: '',
@@ -85,7 +85,7 @@ export function useAdminUsers() {
     setShowAddModal(true);
   };
 
-  // Open modal for edit
+  // Mở modal để chỉnh sửa
   const openEditModal = (user: UserAccount) => {
     setEditingUser(user);
     setFormData({
@@ -100,7 +100,7 @@ export function useAdminUsers() {
     setShowAddModal(true);
   };
 
-  // Submit Handler
+  // Xử lý Submit Form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (formData.password && formData.password.length < 8) {
@@ -110,7 +110,7 @@ export function useAdminUsers() {
     setLoading(true);
     setError(null);
     if (editingUser) {
-      // Edit mode: only include password if user typed a new one
+      // Chế độ Edit: chỉ gửi mật khẩu nếu người dùng nhập mật khẩu mới
       const payload = formData.password ? formData : (({ password, ...rest }) => rest)(formData);
       authFetch(`/api/users/${editingUser.id}`, {
         method: 'PUT',
@@ -136,7 +136,7 @@ export function useAdminUsers() {
           setLoading(false);
         });
     } else {
-      // Add mode: if empty, backend will auto-generate secure password
+      // Chế độ Add: nếu rỗng, backend sẽ tự động tạo mật khẩu an toàn
       const payload = formData.password ? formData : (({ password, ...rest }) => rest)(formData);
       authFetch('/api/users', {
         method: 'POST',
@@ -169,7 +169,7 @@ export function useAdminUsers() {
     }
   };
 
-  // Delete Handler
+  // Xử lý xóa người dùng
   const handleDelete = (id: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) {
       setLoading(true);
@@ -189,7 +189,7 @@ export function useAdminUsers() {
     }
   };
 
-  // Suspend Toggle Handler
+  // Xử lý khóa / mở khóa tài khoản
   const toggleSuspend = (id: string) => {
     const user = users.find(u => u.id === id);
     if (!user) return;
@@ -213,7 +213,7 @@ export function useAdminUsers() {
       });
   };
 
-  // Filtered users
+  // Lọc danh sách người dùng
   const filteredUsers = users.filter(user => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -224,7 +224,7 @@ export function useAdminUsers() {
     return matchesSearch && matchesRole && matchesStatus;
   });
 
-  // Quick stats
+  // Thống kê nhanh
   const totalUsers = users.length;
   const totalStudents = users.filter(u => u.role === 'student').length;
   const totalTeachers = users.filter(u => u.role === 'teacher').length;

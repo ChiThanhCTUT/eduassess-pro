@@ -15,7 +15,7 @@ export default function AuthScreen({ onLogin }: AuthScreenProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Login form inputs
+  // Các biến của Form đăng nhập
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(true);

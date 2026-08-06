@@ -7,7 +7,7 @@ interface ExamAnalyticsProps {
 }
 
 export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps) {
-  // Compute analytics dynamically from active exam history and questions database
+  // Tính toán số liệu phân tích động từ lịch sử thi và cơ sở dữ liệu câu hỏi
   const scores = history
     .map(h => {
       const parts = h.score.split('/');
@@ -18,7 +18,7 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
   const avg =
     scores.length > 0 ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '0.0';
 
-  // Track dynamic attempts from history
+  // Theo dõi số lượt thi động từ lịch sử
   const qAttempts: Record<string, { total: number; wrong: number }> = {};
   history.forEach(h => {
     if (h.questionsDetail && Array.isArray(h.questionsDetail)) {
@@ -80,7 +80,7 @@ export default function ExamAnalytics({ questions, history }: ExamAnalyticsProps
     });
   }
 
-  // Hard questions table - filtered from our database with dynamic error rates
+  // Bảng câu hỏi khó - được lọc từ cơ sở dữ liệu với tỷ lệ sai động
   const hardestQuestions = questionsWithDynamicRate
     .filter(q => q.errorRate && q.errorRate > 0)
     .sort((a, b) => (b.errorRate || 0) - (a.errorRate || 0));

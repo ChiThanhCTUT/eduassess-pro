@@ -24,7 +24,7 @@ function hashPasswordSync(password: string): string {
 
 const router = express.Router();
 
-// --- AUTHENTICATION ENDPOINTS ---
+// --- CÁC ENDPOINT LIÊN QUAN ĐẾN XÁC THỰC (AUTHENTICATION) ---
 
 const loginAttempts = new Map<string, { count: number; resetTime: number }>();
 
@@ -49,7 +49,7 @@ const loginRateLimiter = (req: any, res: any, next: any) => {
   next();
 };
 
-// POST login
+// POST đăng nhập (login)
 router.post('/api/auth/login', loginRateLimiter, async (req: any, res) => {
   const ip = req.ip || req.connection?.remoteAddress || 'unknown';
 
@@ -92,7 +92,7 @@ router.post('/api/auth/login', loginRateLimiter, async (req: any, res) => {
 
     loginAttempts.delete(ip);
 
-    // Check if account is suspended
+    // Kiểm tra xem tài khoản có bị khóa hay không
     if (user.status === 'Suspended') {
       return res
         .status(403)
@@ -107,7 +107,7 @@ router.post('/api/auth/login', loginRateLimiter, async (req: any, res) => {
       class_id: user.class_id || null,
     };
     const refreshToken = crypto.randomBytes(64).toString('hex');
-    const refreshExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+    const refreshExpiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
     await pool.query('INSERT INTO refresh_tokens (token, email, expiresAt) VALUES (?, ?, ?)', [
       refreshToken,
@@ -117,7 +117,7 @@ router.post('/api/auth/login', loginRateLimiter, async (req: any, res) => {
 
     res.json({
       message: 'Đăng nhập thành công.',
-      token: generateToken(tokenUser), // Defaults to 30 mins
+      token: generateToken(tokenUser), // Mặc định 30 phút
       refreshToken,
       user: {
         email,
@@ -132,7 +132,7 @@ router.post('/api/auth/login', loginRateLimiter, async (req: any, res) => {
   }
 });
 
-// POST refresh token
+// POST làm mới token (refresh token)
 router.post('/api/auth/refresh', async (req: any, res) => {
   try {
     const { refreshToken } = req.body;
@@ -182,7 +182,7 @@ router.post('/api/auth/refresh', async (req: any, res) => {
   }
 });
 
-// POST logout
+// POST đăng xuất (logout)
 router.post('/api/auth/logout', async (req: any, res) => {
   try {
     const { refreshToken } = req.body;

@@ -16,10 +16,10 @@ export default function StudentDashboard({
   completedExamsCount,
   examHistory,
 }: StudentDashboardProps) {
-  // Extract simple first name
+  // Lấy tên gọi ngắn gọn (first name)
   const firstName = userName.split(' ').pop() || userName;
 
-  // Calculate dynamic GPA
+  // Tính toán điểm trung bình (GPA) động
   const calculateGPA = () => {
     if (!examHistory || examHistory.length === 0) return { gpa: '0.0', text: 'Chưa có điểm thi' };
     let totalNormalized = 0;
@@ -48,7 +48,7 @@ export default function StudentDashboard({
 
   const gpaInfo = calculateGPA();
 
-  // Calculate dynamic study hours from completed exams + preparation estimate
+  // Tính toán thời gian học động từ số bài đã hoàn thành + dự kiến thời gian chuẩn bị
   const calculateStudyHours = () => {
     if (!examHistory || examHistory.length === 0) return '0.0 giờ';
     const totalMinutes = examHistory.reduce((sum, h) => {
@@ -59,7 +59,7 @@ export default function StudentDashboard({
     return `${hours.toFixed(1)} giờ`;
   };
 
-  // Calculate dynamic subject progress from active and completed exams
+  // Tính toán tiến độ môn học động từ các đề thi đang mở và đã hoàn thành
   const calculateSubjectProgress = () => {
     const subjectsMap: { [key: string]: { total: number; completed: number } } = {};
     activeExams.forEach(e => {

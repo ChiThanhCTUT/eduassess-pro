@@ -42,9 +42,9 @@ const loginRateLimiter = (req: any, res: any, next: any) => {
 
 const router = express.Router();
 
-// --- API Endpoints ---
+// --- CÁC ENDPOINT CHUNG ---
 
-// GET all questions (with optional filters)
+// GET lấy danh sách câu hỏi (kèm theo các bộ lọc nếu có)
 router.get('/api/questions', authenticateToken, async (req: any, res) => {
   try {
     const { search, subject, difficulty, topic } = req.query;
@@ -88,7 +88,7 @@ router.get('/api/questions', authenticateToken, async (req: any, res) => {
   }
 });
 
-// POST new question
+// POST tạo mới câu hỏi
 router.post(
   '/api/questions',
   authenticateToken,
@@ -117,7 +117,7 @@ router.post(
   },
 );
 
-// PUT update question
+// PUT cập nhật câu hỏi
 router.put(
   '/api/questions/:id',
   authenticateToken,
@@ -175,7 +175,7 @@ router.put(
   },
 );
 
-// DELETE question
+// DELETE xóa câu hỏi
 router.delete(
   '/api/questions/:id',
   authenticateToken,
@@ -207,7 +207,7 @@ router.delete(
   },
 );
 
-// GET all active exams (with filters, class-based for students)
+// GET danh sách đề thi đang hoạt động (có bộ lọc, học sinh chỉ xem đề thi của lớp mình)
 router.get('/api/exams', authenticateToken, async (req: any, res) => {
   try {
     const { search, subject, category } = req.query;
@@ -215,7 +215,7 @@ router.get('/api/exams', authenticateToken, async (req: any, res) => {
       'SELECT e.*, c.class_name, c.class_code FROM active_exams e LEFT JOIN classes c ON e.class_id = c.id WHERE 1=1';
     const params: any[] = [];
 
-    // Students only see exams assigned to their class or exams with no class, AND exams they haven't submitted yet
+    // Sinh viên chỉ xem được các đề thi dành cho lớp của mình hoặc không chỉ định lớp, VÀ các đề thi chưa nộp
     if (req.user.role === 'student') {
       if (req.user.class_id) {
         query += ' AND (e.class_id = ? OR e.class_id IS NULL)';
@@ -256,7 +256,7 @@ router.get('/api/exams', authenticateToken, async (req: any, res) => {
   }
 });
 
-// POST new exam - validates question count and stores selected questionIds according to difficulty distribution
+// POST tạo mới đề thi - kiểm tra số lượng câu hỏi và bốc ngẫu nhiên câu hỏi theo cấu hình độ khó
 router.post('/api/exams', authenticateToken, requireRole(['teacher', 'admin']), async (req, res) => {
   try {
     const exam = req.body;
@@ -275,7 +275,7 @@ router.post('/api/exams', authenticateToken, requireRole(['teacher', 'admin']), 
       return res.status(400).json({ error: 'Số lượng câu hỏi phải lớn hơn 0.' });
     }
 
-    // Validate: count available questions for this subject
+    // Xác thực: kiểm tra tổng số lượng câu hỏi có sẵn cho môn học này
     const [availableRows] = await pool.query(
       'SELECT id, difficulty FROM questions WHERE subject = ?',
       [subject],
@@ -326,7 +326,7 @@ router.post('/api/exams', authenticateToken, requireRole(['teacher', 'admin']), 
       const pickedSet = new Set([...pickedEasy, ...pickedMedium, ...pickedHard].map(q => q.id));
       selected = [...pickedEasy, ...pickedMedium, ...pickedHard];
 
-      // If not enough due to rounding or limited questions per difficulty, backfill randomly from remaining subject pool
+      // Nếu thiếu số lượng câu hỏi do làm tròn hoặc do kho thiếu câu hỏi độ khó tương ứng, lấy bù ngẫu nhiên từ kho còn lại
       if (selected.length < questionCount) {
         const remaining = available
           .filter(q => !pickedSet.has(q.id))
@@ -365,7 +365,7 @@ router.post('/api/exams', authenticateToken, requireRole(['teacher', 'admin']), 
   }
 });
 
-// PUT update exam
+// PUT cập nhật đề thi
 router.put(
   '/api/exams/:id',
   authenticateToken,
@@ -397,7 +397,7 @@ router.put(
   },
 );
 
-// DELETE exam
+// DELETE xóa đề thi
 router.delete(
   '/api/exams/:id',
   authenticateToken,
@@ -413,7 +413,7 @@ router.delete(
   },
 );
 
-// GET all exam histories (Filtered dynamically: student gets own; teacher/admin gets all)
+// GET lấy lịch sử làm bài thi (Lọc động: sinh viên lấy của chính mình; giảng viên/admin lấy toàn bộ)
 router.get('/api/history', authenticateToken, async (req: any, res) => {
   try {
     let rows;
@@ -442,7 +442,7 @@ router.get('/api/history', authenticateToken, async (req: any, res) => {
   }
 });
 
-// POST new exam history (Securely maps userEmail from the verified Token)
+// POST tạo mới lịch sử thi (Gắn kết an toàn userEmail từ Token đã được xác thực)
 router.post('/api/history', authenticateToken, async (req: any, res) => {
   try {
     const h = req.body;
@@ -457,7 +457,7 @@ router.post('/api/history', authenticateToken, async (req: any, res) => {
       return res.status(400).json({ error: 'Mã đề thi không hợp lệ.' });
     }
 
-    // Prevent duplicate submissions
+    // Ngăn chặn nộp bài trùng lặp
     if (req.user.role === 'student') {
       const [existing] = await pool.query(
         'SELECT id FROM exam_history WHERE userEmail = ? AND examId = ?',
@@ -529,7 +529,7 @@ router.post('/api/history', authenticateToken, async (req: any, res) => {
         return { ...item, isCorrect: false };
       });
 
-      // Use totalExamQuestions instead of verifiedDetails.length to prevent submitting only 1 question to get 10/10
+      // Dùng tổng số câu hỏi gốc (totalExamQuestions) thay vì verifiedDetails.length để tránh việc thí sinh chỉ nộp 1 câu đúng được 10 điểm
       const finalScoreNum = (correctCount / totalExamQuestions) * 10;
       finalScoreStr = `${finalScoreNum.toFixed(1)}/10`;
       const pass = finalScoreNum >= 5;
@@ -564,7 +564,7 @@ router.post('/api/history', authenticateToken, async (req: any, res) => {
   }
 });
 
-// DELETE exam history
+// DELETE xóa lịch sử thi
 router.delete(
   '/api/history/:id',
   authenticateToken,
@@ -580,7 +580,7 @@ router.delete(
   },
 );
 
-// POST re-grade exam history against current question bank answers
+// POST chấm lại bài thi dựa trên đáp án mới nhất từ ngân hàng câu hỏi
 router.post(
   '/api/history/:id/regrade',
   authenticateToken,

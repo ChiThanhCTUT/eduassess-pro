@@ -42,15 +42,15 @@ const loginRateLimiter = (req: any, res: any, next: any) => {
 
 const router = express.Router();
 
-// --- DEPARTMENT & SUBJECT CRUD ENDPOINTS ---
+// --- CÁC ENDPOINT QUẢN LÝ KHOA & MÔN HỌC ---
 
-// GET all departments (with their subjects joined and teacher counts computed dynamically)
+// GET lấy danh sách khoa (kèm danh sách môn học và số lượng giảng viên)
 router.get('/api/departments', authenticateToken, async (_req, res) => {
   try {
     const [depts] = await pool.query('SELECT * FROM departments');
     const [subs] = await pool.query('SELECT * FROM subjects');
 
-    // Calculate dynamic teacher count per department from users table
+    // Tính số lượng giảng viên theo từng khoa từ bảng users
     const [teacherCounts] = await pool.query(`
         SELECT department, COUNT(*) as count 
         FROM users 
@@ -64,7 +64,7 @@ router.get('/api/departments', authenticateToken, async (_req, res) => {
       }
     });
 
-    // Calculate dynamic question count per subject from questions table
+    // Tính số lượng câu hỏi theo từng môn học từ bảng questions
     const [questionCounts] = await pool.query(`
         SELECT subject, COUNT(*) as count 
         FROM questions 
@@ -101,11 +101,11 @@ router.get('/api/departments', authenticateToken, async (_req, res) => {
   }
 });
 
-// GET all subjects
+// GET lấy toàn bộ môn học
 router.get('/api/subjects', authenticateToken, async (_req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM subjects');
-    // Calculate dynamic question count per subject
+    // Tính số lượng câu hỏi hiện tại của môn học
     const [questionCounts] = await pool.query(`
         SELECT subject, COUNT(*) as count 
         FROM questions 
@@ -128,7 +128,7 @@ router.get('/api/subjects', authenticateToken, async (_req, res) => {
   }
 });
 
-// POST create department
+// POST tạo mới khoa
 router.post('/api/departments', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id, name, head, teacherCount } = req.body;
@@ -155,7 +155,7 @@ router.post('/api/departments', authenticateToken, requireRole(['admin']), async
   }
 });
 
-// DELETE department
+// DELETE xóa khoa
 router.delete('/api/departments/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -166,7 +166,7 @@ router.delete('/api/departments/:id', authenticateToken, requireRole(['admin']),
   }
 });
 
-// POST create subject
+// POST tạo mới môn học
 router.post('/api/subjects', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { code, name, credits, questionCount, deptId } = req.body;
@@ -187,7 +187,7 @@ router.post('/api/subjects', authenticateToken, requireRole(['admin']), async (r
   }
 });
 
-// DELETE subject
+// DELETE xóa môn học
 router.delete('/api/subjects/:code', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { code } = req.params;
@@ -198,7 +198,7 @@ router.delete('/api/subjects/:code', authenticateToken, requireRole(['admin']), 
   }
 });
 
-// PUT update department
+// PUT cập nhật khoa
 router.put('/api/departments/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -215,7 +215,7 @@ router.put('/api/departments/:id', authenticateToken, requireRole(['admin']), as
   }
 });
 
-// PUT update subject
+// PUT cập nhật môn học
 router.put('/api/subjects/:code', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { code } = req.params;

@@ -4,7 +4,7 @@ import { authenticateToken, requireRole } from '../middleware';
 
 const router = express.Router();
 
-// GET all classes (with student count and department name)
+// GET lấy tất cả danh sách lớp (kèm theo số lượng sinh viên và tên khoa)
 router.get('/api/classes', authenticateToken, async (_req, res) => {
   try {
     const [rows] = await pool.query(`
@@ -20,7 +20,7 @@ router.get('/api/classes', authenticateToken, async (_req, res) => {
   }
 });
 
-// POST create class
+// POST tạo mới lớp học
 router.post('/api/classes', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { department_id, class_code, class_name, course_year } = req.body;
@@ -64,7 +64,7 @@ router.post('/api/classes', authenticateToken, requireRole(['admin']), async (re
   }
 });
 
-// PUT update class
+// PUT cập nhật lớp học
 router.put('/api/classes/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -104,11 +104,11 @@ router.put('/api/classes/:id', authenticateToken, requireRole(['admin']), async 
   }
 });
 
-// DELETE class
+// DELETE xóa lớp học
 router.delete('/api/classes/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    // Set class_id to null for users and exams assigned to this class
+    // Đặt class_id thành null cho các user và đề thi đang thuộc về lớp này
     await pool.query('UPDATE users SET class_id = NULL WHERE class_id = ?', [id]);
     await pool.query('UPDATE active_exams SET class_id = NULL WHERE class_id = ?', [id]);
     await pool.query('DELETE FROM classes WHERE id = ?', [id]);

@@ -8,7 +8,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ currentTab, setCurrentTab, role, onLogout }: SidebarProps) {
-  // Navigation lists depending on roles
+  // Danh sách điều hướng phụ thuộc vào vai trò (role)
   return (
     <aside className="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 flex flex-col p-4 bg-[#f3f4f5] dark:bg-[#ffffff] border-r border-[#c2c6d6] z-40">
       <div className="flex items-center gap-3 mb-8 px-2">

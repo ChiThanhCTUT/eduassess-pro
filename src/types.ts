@@ -1,15 +1,15 @@
 export type Role = 'student' | 'teacher' | 'admin';
 
 export interface Question {
-  id: string; // e.g. '#Q-89021'
+  id: string; // ví dụ: '#Q-89021'
   content: string;
   subject: string;
   difficulty: 'Dễ' | 'Trung bình' | 'Khó';
   options?: string[]; // A, B, C, D
-  correctAnswer?: number; // index of options (0-3)
+  correctAnswer?: number; // chỉ số của mảng options (0-3)
   topic?: string;
   avgTime?: string;
-  errorRate?: number; // e.g. 82.4
+  errorRate?: number; // ví dụ: 82.4
 }
 
 export interface ExamHistory {
@@ -20,7 +20,7 @@ export interface ExamHistory {
   submitDate: string;
   score: string;
   result: 'Đạt' | 'Không đạt';
-  iconName: string; // e.g., functions, code, psychology, biotech
+  iconName: string; // ví dụ: functions, code, psychology, biotech
   userEmail?: string;
   userName?: string;
   questionsDetail?: {
@@ -38,7 +38,7 @@ export interface ActiveExam {
   id: string;
   title: string;
   subject: string;
-  duration: number; // in minutes
+  duration: number; // tính bằng phút
   questionCount: number;
   description: string;
   iconName: string;
@@ -49,10 +49,10 @@ export interface ActiveExam {
     medium: number;
     hard: number;
   };
-  questionIds?: string; // JSON array of question IDs, selected at exam creation time
-  className?: string; // joined class name for display
-  class_name?: string; // exact SQL joined class name
-  class_code?: string; // exact SQL joined class code
+  questionIds?: string; // mảng JSON chứa danh sách ID câu hỏi, được chọn tại thời điểm tạo đề thi
+  className?: string; // tên lớp học hiển thị
+  class_name?: string; // tên lớp học (từ SQL)
+  class_code?: string; // mã lớp học (từ SQL)
 }
 
 export interface NewExamConfig {

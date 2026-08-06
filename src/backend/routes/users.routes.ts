@@ -42,9 +42,9 @@ const loginRateLimiter = (req: any, res: any, next: any) => {
 
 const router = express.Router();
 
-// --- USER CRUD ENDPOINTS ---
+// --- CÁC ENDPOINT QUẢN LÝ NGƯỜI DÙNG ---
 
-// GET all users
+// GET lấy danh sách người dùng
 router.get('/api/users', authenticateToken, requireRole(['admin', 'teacher']), async (req, res) => {
   try {
     const { role, status, search, sortBy = 'id', sortOrder = 'DESC' } = req.query;
@@ -84,7 +84,7 @@ router.get('/api/users', authenticateToken, requireRole(['admin', 'teacher']), a
   }
 });
 
-// POST create user
+// POST tạo mới người dùng
 router.post('/api/users', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { email, password, name, role, department, status, class_id } = req.body;
@@ -103,7 +103,7 @@ router.post('/api/users', authenticateToken, requireRole(['admin']), async (req,
       return res.status(400).json({ error: 'Email này đã được sử dụng.' });
     }
 
-    // Auto-generate studentId for students based on class_code
+    // Tự động sinh studentId cho sinh viên dựa trên mã lớp (class_code)
     let studentId = '';
     if (normalizeRole(role) === 'student' && class_id) {
       const [classRows] = await pool.query('SELECT class_code FROM classes WHERE id = ?', [
@@ -111,7 +111,7 @@ router.post('/api/users', authenticateToken, requireRole(['admin']), async (req,
       ]);
       if ((classRows as any[]).length > 0) {
         const classCode = (classRows as any[])[0].class_code;
-        // Count existing students in this class to generate next number
+        // Đếm số lượng sinh viên hiện có trong lớp để tạo số thứ tự tiếp theo
         const [countRows] = await pool.query(
           'SELECT COUNT(*) as cnt FROM users WHERE class_id = ?',
           [class_id],
@@ -146,7 +146,7 @@ router.post('/api/users', authenticateToken, requireRole(['admin']), async (req,
 
     const newId = (result as any).insertId;
 
-    // Get class info for response
+    // Lấy thông tin lớp học để trả về response
     let class_name = null;
     let class_code = null;
     if (class_id) {
@@ -178,7 +178,7 @@ router.post('/api/users', authenticateToken, requireRole(['admin']), async (req,
   }
 });
 
-// PUT update user
+// PUT cập nhật người dùng
 router.put('/api/users/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -243,7 +243,7 @@ router.put('/api/users/:id', authenticateToken, requireRole(['admin']), async (r
   }
 });
 
-// DELETE user
+// DELETE xóa người dùng
 router.delete('/api/users/:id', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;
@@ -254,7 +254,7 @@ router.delete('/api/users/:id', authenticateToken, requireRole(['admin']), async
   }
 });
 
-// PUT toggle suspend status
+// PUT thay đổi trạng thái (đình chỉ / hoạt động)
 router.put('/api/users/:id/status', authenticateToken, requireRole(['admin']), async (req, res) => {
   try {
     const { id } = req.params;

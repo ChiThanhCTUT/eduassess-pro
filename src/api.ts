@@ -1,6 +1,6 @@
 /**
- * Shared API utilities - separated from App.tsx to avoid circular imports.
- * Components should import authFetch from here, not from App.tsx.
+ * Tiện ích API dùng chung - được tách khỏi App.tsx để tránh import vòng lặp.
+ * Các components nên import authFetch từ đây, thay vì từ App.tsx.
  */
 
 interface CustomRequestInit extends RequestInit {
@@ -38,7 +38,7 @@ export async function authFetch(url: string, options: CustomRequestInit = {}): P
     ) {
       const refreshToken = localStorage.getItem('refreshToken');
       if (refreshToken && !options._isRetry) {
-        // Attempt to refresh
+        // Thử làm mới (refresh) token
         try {
           const refreshRes = await fetch('/api/auth/refresh', {
             method: 'POST',
@@ -49,7 +49,7 @@ export async function authFetch(url: string, options: CustomRequestInit = {}): P
           if (refreshRes.ok) {
             const data = await refreshRes.json();
             localStorage.setItem('userToken', data.token);
-            // Retry the original request with the new token
+            // Thử lại request ban đầu với token mới
             return authFetch(url, { ...options, _isRetry: true } as any);
           }
         } catch (e) {
@@ -57,7 +57,7 @@ export async function authFetch(url: string, options: CustomRequestInit = {}): P
         }
       }
 
-      // If refresh fails or no refresh token, logout
+      // Nếu làm mới thất bại hoặc không có refresh token, tiến hành đăng xuất
       localStorage.removeItem('isLoggedIn');
       localStorage.removeItem('userToken');
       localStorage.removeItem('userRole');

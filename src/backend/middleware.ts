@@ -17,7 +17,7 @@ export function generateToken(
     name: user.name,
     studentId: user.studentId,
     class_id: user.class_id || null,
-    exp: Date.now() + expiresInMs, // Default 30 minutes
+    exp: Date.now() + expiresInMs, // Mặc định 30 phút
   });
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
   return Buffer.from(payload).toString('base64') + '.' + signature;
@@ -32,7 +32,7 @@ export function verifyToken(token: string): any | null {
     const expectedSignature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
     if (signature !== expectedSignature) return null;
     const parsed = JSON.parse(payload);
-    if (Date.now() > parsed.exp) return null; // Expired
+    if (Date.now() > parsed.exp) return null; // Đã hết hạn
     return parsed;
   } catch (e) {
     return null;
@@ -41,7 +41,7 @@ export function verifyToken(token: string): any | null {
 
 export async function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = authHeader && authHeader.split(' ')[1]; // Ký tự Bearer TOKEN
   if (!token) {
     res.status(401).json({ error: 'Chưa cung cấp token xác thực.' });
     return;
@@ -52,7 +52,7 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
     return;
   }
 
-  // Synchronize status and role with Database
+  // Đồng bộ hóa trạng thái và vai trò với Cơ sở dữ liệu
   try {
     const [rows] = await pool.query('SELECT status, role FROM users WHERE email = ?', [user.email]);
     if ((rows as any[]).length === 0) {
@@ -64,7 +64,7 @@ export async function authenticateToken(req: AuthRequest, res: Response, next: N
       res.status(403).json({ error: 'Tài khoản của bạn đã bị khóa bởi quản trị viên.' });
       return;
     }
-    user.role = dbUser.role; // Update to latest role dynamically
+    user.role = dbUser.role; // Cập nhật linh hoạt vai trò mới nhất
   } catch (err) {
     res.status(500).json({ error: 'Lỗi xác thực đồng bộ trạng thái.' });
     return;

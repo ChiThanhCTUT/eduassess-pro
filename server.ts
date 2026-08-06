@@ -45,7 +45,7 @@ function generateToken(
     name: user.name,
     studentId: user.studentId,
     class_id: user.class_id || null,
-    exp: Date.now() + expiresInMs, // Default 30 minutes
+    exp: Date.now() + expiresInMs, // Mặc định 30 phút
   });
   const signature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
   return Buffer.from(payload).toString('base64') + '.' + signature;
@@ -60,7 +60,7 @@ function verifyToken(token: string): any | null {
     const expectedSignature = crypto.createHmac('sha256', JWT_SECRET).update(payload).digest('hex');
     if (signature !== expectedSignature) return null;
     const parsed = JSON.parse(payload);
-    if (Date.now() > parsed.exp) return null; // Expired
+    if (Date.now() > parsed.exp) return null; // Đã hết hạn
     return parsed;
   } catch (e) {
     return null;
@@ -69,7 +69,7 @@ function verifyToken(token: string): any | null {
 
 async function authenticateToken(req: any, res: any, next: any) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = authHeader && authHeader.split(' ')[1]; // Ký tự Bearer TOKEN
   if (!token) {
     return res.status(401).json({ error: 'Chưa cung cấp token xác thực.' });
   }
@@ -78,7 +78,7 @@ async function authenticateToken(req: any, res: any, next: any) {
     return res.status(403).json({ error: 'Token không hợp lệ hoặc đã hết hạn.' });
   }
 
-  // Synchronize status and role with Database
+  // Đồng bộ hóa trạng thái và vai trò với Cơ sở dữ liệu
   try {
     const [rows] = await pool.query('SELECT status, role FROM users WHERE email = ?', [user.email]);
     if ((rows as any[]).length === 0) {
@@ -88,7 +88,7 @@ async function authenticateToken(req: any, res: any, next: any) {
     if (dbUser.status === 'Suspended') {
       return res.status(403).json({ error: 'Tài khoản của bạn đã bị khóa bởi quản trị viên.' });
     }
-    user.role = dbUser.role; // Update to latest role dynamically
+    user.role = dbUser.role; // Cập nhật linh hoạt vai trò mới nhất
   } catch (err) {
     return res.status(500).json({ error: 'Lỗi xác thực đồng bộ trạng thái.' });
   }
@@ -117,7 +117,7 @@ function normalizeRole(dbRole: string): 'student' | 'teacher' | 'admin' {
   return 'student';
 }
 
-// Load environment variables from .env.local
+// Tải các biến môi trường từ .env.local
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
 
 const app = express();
@@ -157,7 +157,7 @@ app.get(/^(?!\/api).+/, (req, res) => {
   res.sendFile(path.join(__dirname, 'dist/index.html'));
 });
 
-// Start the server
+// Khởi động server
 const PORT = process.env.PORT || 5000;
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {

@@ -8,7 +8,7 @@ interface ExamTakingProps {
 }
 
 export default function ExamTaking({ exam, questions, onFinishExam }: ExamTakingProps) {
-  // Use specific question IDs if provided, otherwise filter by subject
+  // Sử dụng danh sách ID câu hỏi cụ thể nếu có, ngược lại lọc theo môn học
   let examQuestions: Question[];
   if (exam.questionIds && exam.questionIds.trim() !== '') {
     try {
@@ -31,8 +31,8 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
     answersRef.current = answers;
   }, [answers]);
 
-  const [flagged, setFlagged] = useState<Record<number, boolean>>({}); // questionIndex -> boolean flag
-  const [timeLeft, setTimeLeft] = useState(exam.duration * 60); // in seconds
+  const [flagged, setFlagged] = useState<Record<number, boolean>>({}); // questionIndex -> cờ đánh dấu (boolean)
+  const [timeLeft, setTimeLeft] = useState(exam.duration * 60); // tính bằng giây
   const [showToast, setShowToast] = useState(false);
 
   const handleSubmit = useCallback(
@@ -51,7 +51,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
       }
 
       const currentAnswers = answersRef.current;
-      // Calculate grade
+      // Tính điểm
       let correctCount = 0;
       const detailsList = examQuestions.map((q, idx) => {
         const userOptIdx = currentAnswers[idx];
@@ -103,7 +103,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
     [exam, examQuestions, onFinishExam],
   );
 
-  // Active countdown timer
+  // Đồng hồ đếm ngược đang chạy
   useEffect(() => {
     const interval = setInterval(() => {
       setTimeLeft(prev => {
@@ -128,7 +128,7 @@ export default function ExamTaking({ exam, questions, onFinishExam }: ExamTaking
 
   const handleSelectOption = (optIndex: number) => {
     setAnswers(prev => ({ ...prev, [currentIndex]: optIndex }));
-    // Show quick autosafe toast
+    // Hiển thị thông báo lưu tự động nhanh
     setShowToast(true);
     setTimeout(() => setShowToast(false), 2000);
   };

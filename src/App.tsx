@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Role, Question, ExamHistory, ActiveExam } from './types';
 
-// Component imports
+// Khai báo các Components
 import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 import AuthScreen from './components/AuthScreen';
@@ -35,10 +35,10 @@ export default function App() {
     isLoading, refreshAppData
   } = useAppData(isLoggedIn);
 
-  // Active testing state
+  // Trạng thái đang thi
   const [takingExam, setTakingExam] = useState<ActiveExam | null>(null);
 
-  // Exam workflow
+  // Luồng xử lý thi
   const handleStartExam = (exam: ActiveExam) => {
     setTakingExam(exam);
   };
@@ -90,7 +90,7 @@ export default function App() {
     }
   };
 
-  // Admin Question Bank workflow
+  // Luồng xử lý Ngân hàng câu hỏi
   const handleAddQuestion = (newQ: Question) => {
     return authFetch('/api/questions', {
       method: 'POST',
@@ -138,7 +138,7 @@ export default function App() {
       .catch(err => console.error('Error deleting question:', err));
   };
 
-  // Create Exam workflow
+  // Luồng xử lý Tạo đề thi
   const handleCreateExam = async (newExam: ActiveExam): Promise<boolean> => {
     try {
       const res = await authFetch('/api/exams', {
@@ -148,7 +148,7 @@ export default function App() {
       });
       const data = await handleResponse(res);
       setActiveExams(prev => [data, ...prev]);
-      setCurrentTab('dashboard'); // route back to let students see it
+      setCurrentTab('dashboard'); // quay về trang chủ để sinh viên có thể xem
       return true;
     } catch (err: any) {
       alert(err.message || 'Lỗi không thể xuất bản đề thi.');
@@ -157,17 +157,17 @@ export default function App() {
     }
   };
 
-  // Render Full-Screen Exam Session
+  // Hiển thị giao diện thi toàn màn hình
   if (isLoggedIn && takingExam) {
     return <ExamTaking exam={takingExam} questions={questions} onFinishExam={handleFinishExam} />;
   }
 
-  // Render Auth Splash Screen
+  // Hiển thị giao diện Đăng nhập
   if (!isLoggedIn) {
     return <AuthScreen onLogin={handleLogin} />;
   }
 
-  // Render Global Loading State
+  // Hiển thị trạng thái đang tải toàn hệ thống
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] flex-col gap-4">
@@ -179,10 +179,10 @@ export default function App() {
     );
   }
 
-  // Main Dashboard Shell with Topbar and Sidebar layout
+  // Khung giao diện chính với Topbar và Sidebar
   return (
     <div className="min-h-screen bg-[#f8f9fa] dark:bg-[#f3f4f6]">
-      {/* Universal Sticky Header */}
+      {/* Thanh Header cố định toàn cục */}
       <Navbar
         role={role}
         userName={userName}
@@ -191,7 +191,7 @@ export default function App() {
         setCurrentTab={setCurrentTab}
       />
 
-      {/* Floating Side Rail */}
+      {/* Thanh Sidebar trôi nổi */}
       <Sidebar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
@@ -199,7 +199,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      {/* Main content slot */}
+      {/* Khu vực nội dung chính */}
       <div className="pl-64 pt-16 min-h-[calc(100vh-64px)]">
         <main className="p-8 max-w-[1200px] mx-auto transition-all duration-300">
           {currentTab === 'dashboard' && role === 'student' && (
@@ -239,14 +239,14 @@ export default function App() {
               />
             )}
 
-          {/* Admin & Teacher Management Tabs */}
+          {/* Các Tab quản lý của Admin & Giảng viên */}
           {currentTab === 'users' && (role === 'admin' || role === 'teacher') && <AdminUsers />}
 
           {currentTab === 'departments' && role === 'admin' && <AdminDepartments />}
 
           {currentTab === 'classes' && role === 'admin' && <AdminClasses />}
 
-          {/* Tab Fallbacks for Role Shifts */}
+          {/* Xử lý Tab dự phòng khi chuyển đổi vai trò */}
           {currentTab === 'dashboard' && role !== 'student' && (
             <div className="text-center py-20 bg-white border border-[#c2c6d6] rounded-2xl p-6 shadow-sm">
               <span className="material-symbols-outlined text-[64px] text-gray-300">shield</span>
